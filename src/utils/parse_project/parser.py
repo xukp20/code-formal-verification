@@ -1,10 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, Any
 import yaml
 import argparse
 import subprocess
 import json
+from src.utils.parse_project.types import TableInfo, APIInfo, ServiceInfo
+
 
 # 默认配置模板
 LAKE_MANIFEST_TEMPLATE = {
@@ -31,33 +33,6 @@ lean_lib «{{name}}» {
 '''
 
 @dataclass
-class TableInfo:
-    """表信息"""
-    name: str
-    description: dict  # yaml content
-    table_code: Optional[str] = None  # scala code if exists
-    lean_code: Optional[str] = None  # lean code if exists
-
-@dataclass
-class APIInfo:
-    """API信息"""
-    name: str
-    message_description: dict  # message yaml content
-    planner_description: dict  # planner yaml content
-    planner_code: Optional[str] = None  # scala code if exists
-    message_typescript: Optional[str] = None  # typescript code if exists
-    message_code: Optional[str] = None  # scala message code if exists
-    lean_code: Optional[str] = None  # lean code if exists
-
-@dataclass
-class ServiceInfo:
-    """服务信息"""
-    name: str
-    apis: List[APIInfo]
-    tables: List[TableInfo]
-    init_code: Optional[str] = None  # Init.scala content if exists
-
-@dataclass
 class ProjectStructure:
     """项目结构"""
     name: str
@@ -72,6 +47,39 @@ class ProjectStructure:
     SERVICE_DIR = "Service"
     TEST_DIR = "Test"
     BASIC_LEAN = "Basic.lean"
+
+    # add loading and saving project structure as json
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "base_path": str(self.base_path),
+            "services": [service.to_dict() for service in self.services],
+            "lean_base_path": str(self.lean_base_path),
+            "lean_project_name": self.lean_project_name,
+            "lean_project_path": str(self.lean_project_path),
+            "package_path": str(self.package_path)
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ProjectStructure':
+        return cls(
+            name=data["name"],
+            base_path=Path(data["base_path"]),
+            services=[ServiceInfo.from_dict(service) for service in data["services"]],
+            lean_base_path=Path(data["lean_base_path"]),
+            lean_project_name=data["lean_project_name"],
+            lean_project_path=Path(data["lean_project_path"]),
+            package_path=Path(data["package_path"])
+        ) 
+    
+    def save_project(self, path: Path):
+        with open(path, "w") as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load_project(cls, path: Path) -> 'ProjectStructure':
+        with open(path, "r") as f:
+            return cls.from_dict(json.load(f))
 
     @classmethod
     def parse_project(cls, project_name: str, base_path: str, lean_base_path: str) -> 'ProjectStructure':
@@ -513,6 +521,12 @@ def userLogin (name: String) : IO Unit := do
     output_path = Path(args.base_path) / f"{args.project_name}_fake_lean_code.md"
     output_path.write_text(project.to_markdown(), encoding='utf-8')
 
+    # save project
+    project.save_project(Path(args.base_path) / f"{args.project_name}_fake_lean_code.json")
+
+    # load project
+    project = ProjectStructure.load_project(Path(args.base_path) / f"{args.project_name}_fake_lean_code.json")
+    print(project)
 
 if __name__ == "__main__":
     main()
