@@ -281,6 +281,14 @@ class ProjectStructure:
                 raise ValueError(f"API {name} not found in service {service_name}")
             return self.package_path / self.SERVICE_DIR / service_name / f"{name}.lean"
         raise ValueError(f"Unknown kind: {kind}")
+    
+    def get_lean_import_path(self, kind: str, service_name: str, name: str) -> Path:
+        """获取Lean导入路径"""
+        if kind.lower() == "table":
+            return self.lean_project_name + ".Database." + name
+        elif kind.lower() == "api":
+            return self.lean_project_name + ".Service." + service_name + "." + name
+        raise ValueError(f"Unknown kind: {kind}")
 
     def build(self) -> Tuple[bool, str]:
         """构建Lean项目"""
@@ -385,6 +393,13 @@ class ProjectStructure:
                         lines.append("```typescript")
                         lines.append(api.message_typescript)
                         lines.append("```")
+                        
+                    if api.lean_code:
+                        lines.append("\n##### Lean Code")
+                        lines.append("---")
+                        lines.append("```lean")
+                        lines.append(api.lean_code)
+                        lines.append("```")
             
             if service.tables:
                 lines.append("\n### Tables")
@@ -402,6 +417,13 @@ class ProjectStructure:
                         lines.append("---")
                         lines.append("```scala")
                         lines.append(table.table_code)
+                        lines.append("```")
+                        
+                    if table.lean_code:
+                        lines.append("\n##### Lean Code")
+                        lines.append("---")
+                        lines.append("```lean")
+                        lines.append(table.lean_code)
                         lines.append("```")
             
             lines.append("\n---\n")  # Service separator
@@ -469,8 +491,27 @@ def userLogin (name: String) : IO Unit := do
     # Try build again
     success, message = project.build()
     print(success, message)
-    
 
+    # Try get table code, path
+    print("Testing get table code, path")
+    table_code = project.get_lean("table", "UserAuthService", "User")
+    print(table_code)   
+    table_path = project.get_lean_path("table", "UserAuthService", "User")
+    print(table_path)
+    table_import_path = project.get_lean_import_path("table", "UserAuthService", "User")
+    print(table_import_path)
+
+    print("Testing get api code, path")
+    api_code = project.get_lean("api", "UserAuthService", "UserLogin")
+    print(api_code)
+    api_path = project.get_lean_path("api", "UserAuthService", "UserLogin")
+    print(api_path)
+    api_import_path = project.get_lean_import_path("api", "UserAuthService", "UserLogin")
+    print(api_import_path)
+
+    # save md file
+    output_path = Path(args.base_path) / f"{args.project_name}_fake_lean_code.md"
+    output_path.write_text(project.to_markdown(), encoding='utf-8')
 
 
 if __name__ == "__main__":
