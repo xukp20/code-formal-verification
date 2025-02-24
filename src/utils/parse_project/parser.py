@@ -336,7 +336,7 @@ class ProjectStructure:
                 raise ValueError(f"Table {name} not found")
             table.lean_code = None
         elif kind.lower() == "api":
-            service, api = self._find_api_with_service(service_name, name)
+            service, api = self._find_api_with_service(name, service_name=service_name)
             if not service or not api:
                 raise ValueError(f"API {name} not found in service {service_name}")
             api.lean_code = None
@@ -381,7 +381,7 @@ class ProjectStructure:
                 text=True
             )
             success = result.returncode == 0
-            message = result.stdout if success else result.stderr
+            message = result.stdout
             return success, message
             
         except Exception as e:
@@ -443,22 +443,24 @@ class ProjectStructure:
         basic_path = self.package_path / self.BASIC_LEAN
         basic_path.write_text("\n".join(imports))
 
-    def _api_to_markdown(self, service: ServiceInfo, api: APIInfo) -> str:
+    def _api_to_markdown(self, service: ServiceInfo, api: APIInfo, include_description: bool = True) -> str:
         """将API转换为markdown格式"""
         lines = []
         lines.append(f"\n#### {api.name}")
                     
-        lines.append("\n##### Message Description")
-        lines.append("---")
-        lines.append("```yaml")
-        lines.append(yaml.dump(api.message_description, allow_unicode=True))
-        lines.append("```")
+        if include_description:
+            lines.append("\n##### Message Description")
+            lines.append("---")
+            lines.append("```yaml")
+            lines.append(yaml.dump(api.message_description, allow_unicode=True))
+            lines.append("```")
         
-        lines.append("\n##### Planner Description")
-        lines.append("---")
-        lines.append("```yaml")
-        lines.append(yaml.dump(api.planner_description, allow_unicode=True))
-        lines.append("```")
+        if include_description:
+            lines.append("\n##### Planner Description")
+            lines.append("---")
+            lines.append("```yaml")
+            lines.append(yaml.dump(api.planner_description, allow_unicode=True))
+            lines.append("```")
         
         if api.planner_code:
             lines.append("\n##### Planner Code")

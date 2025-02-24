@@ -20,8 +20,16 @@ export PYTHONPATH=$(pwd)
 
 # python src/utils/parse_project/parser.py --base_path source_code/UserAuthenticationProject11 --project_name UserAuthenticationProject11 --lean_base_path lean_project
 
+
+
+export MDOEL="qwen-max-latest"
+
 # python src/pipeline/table/test_analyzer.py
 
 # python src/pipeline/table/test_formalizer.py
 
-python src/pipeline/api/test_table_analyzer.py
+# python src/pipeline/api/test_table_analyzer.py
+
+# python src/pipeline/api/test_api_analyzer.py
+
+python src/pipeline/api/test_formalizer.py

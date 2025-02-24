@@ -24,7 +24,8 @@ async def test_api_table_analyzer():
     logger.info(f"Formalized tables: {table_formalization.formalized_tables}")
     
     # Create and run analyzer
-    api_analyzer = APITableDependencyAnalyzer()
+    model = os.getenv("MODEL", "qwen-max-latest")
+    api_analyzer = APITableDependencyAnalyzer(model=model)
     try:
         api_dependency = await api_analyzer.run(table_formalization, logger)
     except Exception as e:

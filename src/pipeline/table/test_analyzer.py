@@ -37,7 +37,8 @@ async def test_table_dependency():
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
-    analyzer = TableDependencyAnalyzer(model="deepseek-r1")
+    model = os.getenv("MODEL", "qwen-max-latest")
+    analyzer = TableDependencyAnalyzer(model=model)
     try:
         result = await analyzer.run(project, logger)
         

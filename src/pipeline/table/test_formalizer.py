@@ -19,8 +19,9 @@ async def test_table_formalizer():
     logger.addHandler(stream_handler)
 
     table_dependency = TableDependencyInfo.load(Path("outputs") / "table_dependency.json")
-
-    table_formalizer = TableFormalizer()
+    
+    model = os.getenv("MODEL", "qwen-max-latest")
+    table_formalizer = TableFormalizer(model=model)
     # try:    
     table_formalization = await table_formalizer.run(table_dependency, logger)
     # except Exception as e:

@@ -21,13 +21,48 @@ This software project uses multiple database tables with potential dependencies.
 3. Descriptions and Lean 4 code of tables it depends on
 
 Task:
-Formalize the current table into Lean 4 code that:
-1. Correctly imports dependent tables using proper import paths
-2. Represents table relationships (e.g., foreign keys) by maintaining references to dependent tables
-3. Includes methods to validate table constraints
-4. Compiles successfully with the Lean compiler
+Convert the given table definition into Lean 4 code following these specific requirements:
 
-Please provide your response in this format:
+1. Import Dependencies
+   - Use correct import paths for all dependent tables
+   - Import paths should match the project structure
+   - All the imports should be in the front of the file
+   - You can open the imported namespace to use the types without prefix
+   - Example: `import ProjectName.Database.DependentTable`
+
+2. Table Relationships
+   - For foreign key relationships:
+     * Include reference to parent table in the table structure other than the rows
+     * Add validation methods to ensure referential integrity
+
+3. Row Structure
+   - Define structure for individual rows
+   - Include all columns with appropriate types
+   - Example:
+     ```lean
+     structure UserRow where
+       id: Nat
+       name: String
+       email: String
+       age: Option Nat
+       deriving Repr
+     ```
+
+4. Table Structure
+   - Define main table structure containing rows
+   - Example:
+     ```lean
+     structure UserTable where
+       rows: List UserRow
+       deriving Repr
+     ```
+
+5. Compilation Requirements
+   - Code must compile successfully
+   - All types must be properly defined
+   - All dependencies must be correctly imported
+
+Return your analysis in this format:
 ### Analysis
 Step-by-step reasoning of your formalization approach
 
@@ -35,6 +70,8 @@ Step-by-step reasoning of your formalization approach
 ```lean
 <complete file content>
 ```
+
+Please make sure you have '### Lean Code\n```lean' in your response so that I can find the Lean code easily.
 """
 
     def __init__(self, model: str = "deepseek-r1", max_retries: int = 3):
@@ -103,7 +140,7 @@ Step-by-step reasoning of your formalization approach
         
         for attempt in range(self.max_retries):
             if attempt > 0:
-                user_prompt = f"Compilation failed. Error:\n{compilation_error}\n\nPlease fix the Lean code."
+                user_prompt = f"Compilation failed. Error:\n{compilation_error}\n\nPlease fix the Lean code.\n\nPlease make sure you have '### Lean Code\n```lean' in your response so that I can find the Lean code easily."
 
             # Call LLM
             response = await _call_openai_completion_async(
@@ -123,7 +160,8 @@ Step-by-step reasoning of your formalization approach
 
             # Extract Lean code
             try:
-                lean_code = response.split("```lean")[1].split("```")[0].strip()
+                # find the final ```lean and ```
+                lean_code = response.split("### Lean Code\n```lean")[-1].split("```")[0].strip()
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to extract Lean code: {e}")

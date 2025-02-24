@@ -145,7 +145,8 @@ Wrap your JSON response with ```json and ``` markers.
         
         # Extract JSON from response
         try:
-            json_str = response.split("```json")[1].split("```")[0].strip()
+            # find the final ```json and ```
+            json_str = response.split("```json")[-1].split("```")[0].strip()
             dependencies = json.loads(json_str)
         except Exception as e:
             raise ValueError(f"Failed to parse LLM response as JSON: {e}")
