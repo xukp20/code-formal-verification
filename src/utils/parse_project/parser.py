@@ -182,7 +182,7 @@ class ProjectStructure:
             
             # 读取Planner代码
             planner_code = None
-            planner_path = code_dir / "src/main/scala/Impl" / service_name / f"{api_name}Planner.scala"
+            planner_path = code_dir / "src/main/scala/Impl" / service_name / f"{api_name}MessagePlanner.scala"
             if planner_path.exists():
                 planner_code = planner_path.read_text()
                 
@@ -327,6 +327,29 @@ class ProjectStructure:
                 raise ValueError(f"No Lean code for API {name}")
             return api.lean_code
         raise ValueError(f"Unknown kind: {kind}")
+    
+    def del_lean(self, kind: str, service_name: str, name: str) -> None:
+        """删除Lean代码"""
+        if kind.lower() == "table":
+            service, table = self._find_table_with_service(name)
+            if not service or not table:
+                raise ValueError(f"Table {name} not found")
+            table.lean_code = None
+        elif kind.lower() == "api":
+            service, api = self._find_api_with_service(service_name, name)
+            if not service or not api:
+                raise ValueError(f"API {name} not found in service {service_name}")
+            api.lean_code = None
+        else:
+            raise ValueError(f"Unknown kind: {kind}")
+        
+        # 删除文件
+        file_path = self.get_lean_path(kind, service_name, name)
+        if file_path.exists():
+            file_path.unlink()
+        
+        # 更新Basic.lean
+        self._update_basic_lean()
 
     def get_lean_path(self, kind: str, service_name: str, name: str) -> Path:
         """获取Lean文件路径"""
@@ -371,6 +394,23 @@ class ProjectStructure:
                 if table.name == name:
                     return table
         return None
+    
+    def _find_table_with_service(self, name: str) -> Optional[Tuple[ServiceInfo, TableInfo]]:
+        """查找表及其服务"""
+        for service in self.services:
+            for table in service.tables:
+                if table.name == name:
+                    return service, table
+        return None
+    
+    def _find_api_with_service(self, service_name: str, api_name: str) -> Optional[Tuple[ServiceInfo, APIInfo]]:
+        """查找API及其服务"""
+        for service in self.services:
+            if service.name == service_name:
+                for api in service.apis:
+                    if api.name == api_name:
+                        return service, api
+        return None
 
     def _find_api(self, service_name: str, api_name: str) -> Optional[APIInfo]:
         """查找API"""
@@ -401,6 +441,92 @@ class ProjectStructure:
         basic_path = self.package_path / self.BASIC_LEAN
         basic_path.write_text("\n".join(imports))
 
+    def _api_to_markdown(self, service: ServiceInfo, api: APIInfo) -> str:
+        """将API转换为markdown格式"""
+        lines = []
+        lines.append(f"\n#### {api.name}")
+                    
+        lines.append("\n##### Message Description")
+        lines.append("---")
+        lines.append("```yaml")
+        lines.append(yaml.dump(api.message_description, allow_unicode=True))
+        lines.append("```")
+        
+        lines.append("\n##### Planner Description")
+        lines.append("---")
+        lines.append("```yaml")
+        lines.append(yaml.dump(api.planner_description, allow_unicode=True))
+        lines.append("```")
+        
+        if api.planner_code:
+            lines.append("\n##### Planner Code")
+            lines.append("---")
+            lines.append("```scala")
+            lines.append(api.planner_code)
+            lines.append("```")
+        
+        if api.message_code:
+            lines.append("\n##### Message Code")
+            lines.append("---")
+            lines.append("```scala")
+            lines.append(api.message_code)
+            lines.append("```")
+        
+        if api.message_typescript:
+            lines.append("\n##### TypeScript Message")
+            lines.append("---")
+            lines.append("```typescript")
+            lines.append(api.message_typescript)
+            lines.append("```")
+            
+        if api.lean_code:
+            lines.append("\n##### Lean Path")
+            lines.append("---")
+            lines.append("```lean")
+            lines.append(self.get_lean_import_path("api", service.name, api.name))
+            lines.append("```")
+            lines.append("\n##### Lean Code")
+            lines.append("---")
+            lines.append("```lean")
+            lines.append(api.lean_code)
+            lines.append("```")
+        
+        
+        return "\n".join(lines)
+
+    def _table_to_markdown(self, service: ServiceInfo, table: TableInfo) -> str:
+        """将表转换为markdown格式"""
+        lines = []
+        lines.append(f"\n#### {table.name}")
+                    
+        lines.append("\n##### Table Description")
+        lines.append("---")
+        lines.append("```yaml")
+        lines.append(yaml.dump(table.description, allow_unicode=True))
+        lines.append("```")
+        
+        if table.table_code:
+            lines.append("\n##### Table Code")
+            lines.append("---")
+            lines.append("```scala")
+            lines.append(table.table_code)
+            lines.append("```")
+            
+        if table.lean_code:
+            lines.append("\n##### Lean Path")
+            lines.append("---")
+            lines.append("```lean")
+            lines.append(self.get_lean_import_path("table", service.name, table.name))
+            lines.append("```")
+            lines.append("\n##### Lean Code")
+            lines.append("---")
+            lines.append("```lean")
+            lines.append(table.lean_code)
+            lines.append("```")
+
+        return "\n".join(lines)
+    
+
     def to_markdown(self) -> str:
         """Convert the project structure to markdown format"""
         lines = [f"# Project: {self.name}\n"]
@@ -417,73 +543,13 @@ class ProjectStructure:
             if service.apis:
                 lines.append("\n### APIs")
                 for api in service.apis:
-                    lines.append(f"\n#### {api.name}")
-                    
-                    lines.append("\n##### Message Description")
-                    lines.append("---")
-                    lines.append("```yaml")
-                    lines.append(yaml.dump(api.message_description, allow_unicode=True))
-                    lines.append("```")
-                    
-                    lines.append("\n##### Planner Description")
-                    lines.append("---")
-                    lines.append("```yaml")
-                    lines.append(yaml.dump(api.planner_description, allow_unicode=True))
-                    lines.append("```")
-                    
-                    if api.planner_code:
-                        lines.append("\n##### Planner Code")
-                        lines.append("---")
-                        lines.append("```scala")
-                        lines.append(api.planner_code)
-                        lines.append("```")
-                    
-                    if api.message_code:
-                        lines.append("\n##### Message Code")
-                        lines.append("---")
-                        lines.append("```scala")
-                        lines.append(api.message_code)
-                        lines.append("```")
-                    
-                    if api.message_typescript:
-                        lines.append("\n##### TypeScript Message")
-                        lines.append("---")
-                        lines.append("```typescript")
-                        lines.append(api.message_typescript)
-                        lines.append("```")
-                        
-                    if api.lean_code:
-                        lines.append("\n##### Lean Code")
-                        lines.append("---")
-                        lines.append("```lean")
-                        lines.append(api.lean_code)
-                        lines.append("```")
-            
+                    lines.append(self._api_to_markdown(service, api))
+                             
             if service.tables:
                 lines.append("\n### Tables")
                 for table in service.tables:
-                    lines.append(f"\n#### {table.name}")
-                    
-                    lines.append("\n##### Table Description")
-                    lines.append("---")
-                    lines.append("```yaml")
-                    lines.append(yaml.dump(table.description, allow_unicode=True))
-                    lines.append("```")
-                    
-                    if table.table_code:
-                        lines.append("\n##### Table Code")
-                        lines.append("---")
-                        lines.append("```scala")
-                        lines.append(table.table_code)
-                        lines.append("```")
-                        
-                    if table.lean_code:
-                        lines.append("\n##### Lean Code")
-                        lines.append("---")
-                        lines.append("```lean")
-                        lines.append(table.lean_code)
-                        lines.append("```")
-            
+                    lines.append(self._table_to_markdown(service, table))
+
             lines.append("\n---\n")  # Service separator
             
         return "\n".join(lines)
