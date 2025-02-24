@@ -2,7 +2,10 @@ import asyncio
 import os
 from src.utils.parse_project.parser import ProjectStructure
 from src.pipeline.table.analyzer import TableDependencyAnalyzer
+from src.pipeline.table.types import TableDependencyInfo
 from logging import Logger, INFO, StreamHandler, Formatter
+from pathlib import Path
+
 
 async def test_table_dependency():
     # Use default settings from parser
@@ -48,6 +51,14 @@ async def test_table_dependency():
             print(" -> ".join(result.topological_order))
         else:
             print("No valid topological order (cycle detected)")
+
+        # save to the dir
+        Path("outputs").mkdir(exist_ok=True)
+        result.save(Path("outputs") / "table_dependency.json")
+
+        # try load
+        loaded_result = TableDependencyInfo.load(Path("outputs") / "table_dependency.json")
+        print(loaded_result)
             
     except Exception as e:
         print(f"Analysis failed: {str(e)}")
