@@ -18,6 +18,6 @@ export PYTHONPATH=$(pwd)
 
 # python src/utils/parse_project/lean_handler.py
 
-# python src/utils/parse_project/parser.py --base_path source_code/UserAuthenticationProject11 --project_name UserAuthenticationProject11 --lean_base_path lean_project
+python src/utils/parse_project/parser.py --base_path source_code/UserAuthenticationProject11 --project_name UserAuthenticationProject11 --lean_base_path lean_project
 
-python src/pipeline/table/test_analyzer.py
+# python src/pipeline/table/test_analyzer.py

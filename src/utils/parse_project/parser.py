@@ -48,6 +48,56 @@ class ProjectStructure:
     TEST_DIR = "Test"
     BASIC_LEAN = "Basic.lean"
 
+    def print_lean_structure(self) -> str:
+        """Print the structure of Lean project files"""
+        lines = []
+        
+        # Project root directory
+        lines.append(f"{self.lean_project_path.name}/")
+        
+        # Project root lean file
+        lines.append(f"├── {self.lean_project_name}.lean")
+        
+        # Package directory
+        lines.append(f"└── {self.lean_project_name}/")
+        
+        # Basic.lean
+        lines.append(f"    ├── {self.BASIC_LEAN}")
+        
+        # Database directory
+        has_db = False
+        db_lines = []
+        for service in self.services:
+            for table in service.tables:
+                if table.lean_code:
+                    if not has_db:
+                        has_db = True
+                    db_lines.append(f"    │   └── {table.name}.lean")
+        
+        if has_db:
+            lines.append(f"    ├── {self.DATABASE_DIR}/")
+            lines.extend(db_lines)
+        
+        # Service directory
+        has_service = False
+        for i, service in enumerate(self.services):
+            has_api = any(api.lean_code for api in service.apis)
+            if has_api:
+                if not has_service:
+                    has_service = True
+                    lines.append(f"    └── {self.SERVICE_DIR}/")
+                
+                # Service directory
+                lines.append(f"        ├── {service.name}/")
+                
+                # APIs
+                for j, api in enumerate(service.apis):
+                    if api.lean_code:
+                        prefix = "        │   " if j < len(service.apis) - 1 else "        │   "
+                        lines.append(f"{prefix}└── {api.name}.lean")
+        
+        return "\n".join(lines)
+
     # add loading and saving project structure as json
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -488,6 +538,9 @@ def user := "user"
     success, message = project.build()
     print(success, message)
 
+    print("Project structure:")
+    print(project.print_lean_structure())
+
     # Add an api
     project.set_lean("api", "UserAuthService", "UserLogin", """
 import UserAuthenticationProject11.Database.User
@@ -499,6 +552,9 @@ def userLogin (name: String) : IO Unit := do
     # Try build again
     success, message = project.build()
     print(success, message)
+
+    print("Project structure:")
+    print(project.print_lean_structure())
 
     # Try get table code, path
     print("Testing get table code, path")

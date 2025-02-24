@@ -114,4 +114,29 @@ class ProjectStructure(JSONSerializable):
     TEST_DIR = "Test"
     BASIC_LEAN = "Basic.lean"
 
+
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "base_path": self.base_path,
+            "services": [service.to_dict() for service in self.services],
+            "lean_base_path": self.lean_base_path,
+            "lean_project_name": self.lean_project_name,
+            "lean_project_path": self.lean_project_path,
+            "package_path": self.package_path
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ProjectStructure':
+        return cls(
+            name=data["name"],
+            base_path=data["base_path"],
+            services=[ServiceInfo.from_dict(service) for service in data["services"]],
+            lean_base_path=data["lean_base_path"],
+            lean_project_name=data["lean_project_name"],
+            lean_project_path=data["lean_project_path"],
+            package_path=data["package_path"]
+        )
+
     
