@@ -22,4 +22,6 @@ export PYTHONPATH=$(pwd)
 
 # python src/pipeline/table/test_analyzer.py
 
-python src/pipeline/table/test_formalizer.py
+# python src/pipeline/table/test_formalizer.py
+
+python src/pipeline/api/test_table_analyzer.py

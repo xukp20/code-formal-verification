@@ -167,7 +167,7 @@ Step-by-step reasoning of your formalization approach
             dependencies=dependency_info.dependencies,
             topological_order=dependency_info.topological_order
         )
-
+        
         for table_name in dependency_info.topological_order:
             success = await self.formalize_table(
                 project=dependency_info.project,
@@ -177,7 +177,7 @@ Step-by-step reasoning of your formalization approach
             )
             
             if success:
-                result.formalized_tables.add(table_name)
+                result.add_formalized_table(table_name)
             else:
                 break
 

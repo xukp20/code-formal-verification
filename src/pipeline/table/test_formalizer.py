@@ -8,8 +8,7 @@ from pathlib import Path
 
 
 async def test_table_formalizer():
-    # Create and run analyzer
-    logger = Logger("test_analyzer")
+    logger = Logger("test_formalizer")
     # Set to info level
     logger.setLevel(INFO)
     # Add stream handler to logger
@@ -22,11 +21,11 @@ async def test_table_formalizer():
     table_dependency = TableDependencyInfo.load(Path("outputs") / "table_dependency.json")
 
     table_formalizer = TableFormalizer()
-    try:    
-        table_formalization = await table_formalizer.run(table_dependency, logger)
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        return
+    # try:    
+    table_formalization = await table_formalizer.run(table_dependency, logger)
+    # except Exception as e:
+        # logger.error(f"Error: {e}")
+        # return
 
     print(table_formalization)
 

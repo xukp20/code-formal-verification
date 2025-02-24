@@ -403,13 +403,15 @@ class ProjectStructure:
                     return service, table
         return None
     
-    def _find_api_with_service(self, service_name: str, api_name: str) -> Optional[Tuple[ServiceInfo, APIInfo]]:
+    def _find_api_with_service(self, api_name: str, service_name: str=None) -> Optional[Tuple[ServiceInfo, APIInfo]]:
         """查找API及其服务"""
         for service in self.services:
-            if service.name == service_name:
-                for api in service.apis:
-                    if api.name == api_name:
-                        return service, api
+            if service_name and service.name != service_name:
+                continue
+            for api in service.apis:
+                if api.name == api_name:
+                    return service, api
+                
         return None
 
     def _find_api(self, service_name: str, api_name: str) -> Optional[APIInfo]:
