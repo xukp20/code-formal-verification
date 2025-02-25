@@ -76,7 +76,7 @@ class FormalizationPipeline:
         self.project_name = project_name
         self.project_base_path = project_base_path
         self.lean_base_path = lean_base_path
-        self.output_path = Path(output_base_path) / project_name
+        self.output_path = Path(output_base_path) / project_name / "formalization"
         self.model = model
         self.table_formalizer_retries = table_formalizer_retries
         self.api_formalizer_retries = api_formalizer_retries
