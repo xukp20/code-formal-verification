@@ -125,10 +125,10 @@ Wrap your JSON response with ```json and ``` markers.
         user_prompt = self._format_user_prompt(project)
         
         if logger:
-            logger.info(f"Analyzing table dependencies for project: {project.name}")
-            logger.info(f"Table names: {table_names}")
-            logger.info(f"System prompt:\n{self.SYSTEM_PROMPT}")
-            logger.info(f"User prompt:\n{user_prompt}")
+            logger.debug(f"Analyzing table dependencies for project: {project.name}")
+            logger.debug(f"Table names: {table_names}")
+            logger.model_input(f"System prompt:\n{self.SYSTEM_PROMPT}")
+            logger.model_input(f"User prompt:\n{user_prompt}")
 
         # Call LLM
         response = await _call_openai_completion_async(
@@ -138,7 +138,7 @@ Wrap your JSON response with ```json and ``` markers.
         )
 
         if logger:
-            logger.info(f"LLM response:\n{response}")
+            logger.model_output(f"LLM response:\n{response}")
         
         if not response:
             raise RuntimeError("Failed to get response from LLM")

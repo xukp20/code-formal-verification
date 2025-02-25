@@ -132,9 +132,9 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
         user_prompt = f"{deps_prompt}\n{table_prompt}"
 
         if logger:
-            logger.info(f"Formalizing table: {table_name}")
-            logger.info(f"Dependencies: {dependencies}")
-            logger.info(f"User prompt:\n{user_prompt}")
+            logger.debug(f"Formalizing table: {table_name}")
+            logger.debug(f"Dependencies: {dependencies}")
+            logger.model_input(f"User prompt:\n{user_prompt}")
 
         history = history or []
         
@@ -151,7 +151,7 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
             )
 
             if logger:
-                logger.info(f"LLM response:\n{response}")
+                logger.model_output(f"LLM response:\n{response}")
 
             if not response:
                 if logger:
@@ -174,7 +174,7 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
             success, compilation_error = project.build()
             if success:
                 if logger:
-                    logger.info(f"Successfully formalized table: {table_name}")
+                    logger.debug(f"Successfully formalized table: {table_name}")
                 return True
 
             # Remove failed code

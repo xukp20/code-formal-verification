@@ -118,8 +118,8 @@ Example output format:
         user_prompt = f"{apis_prompt}\n{api_prompt}"
 
         if logger:
-            logger.info(f"Analyzing API dependencies: {service_name}.{api_name}")
-            logger.info(f"User prompt:\n{user_prompt}")
+            logger.debug(f"Analyzing API dependencies: {service_name}.{api_name}")
+            logger.model_input(f"User prompt:\n{user_prompt}")
 
         # Call LLM
         response = await _call_openai_completion_async(
@@ -177,7 +177,7 @@ Example output format:
                     ]
                     
                     if logger:
-                        logger.info(f"API {api.name} depends on: {dependencies}")
+                        logger.debug(f"API {api.name} depends on: {dependencies}")
                         
                 except Exception as e:
                     if logger:

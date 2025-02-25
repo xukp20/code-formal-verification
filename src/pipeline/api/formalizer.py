@@ -170,8 +170,8 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
                 user_prompt = f"Compilation failed. Error:\n{compilation_error}\n\nPlease fix the Lean code.\n\nPlease make sure you have '### Lean Code\n```lean' in your response so that I can find the Lean code easily."
 
             if logger:
-                logger.info(f"Formalizing API {api_name} (attempt {attempt + 1}/{self.max_retries})")
-                logger.info(f"User prompt: {user_prompt}")
+                logger.debug(f"Formalizing API {api_name} (attempt {attempt + 1}/{self.max_retries})")
+                logger.model_input(f"User prompt: {user_prompt}")
 
             # Call LLM
             response = await _call_openai_completion_async(
@@ -182,7 +182,7 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
             )
 
             if logger:
-                logger.info(f"Response: {response}")
+                logger.model_output(f"Response: {response}")
 
             if not response:
                 continue
@@ -203,7 +203,7 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
             success, compilation_error = project.build()
             if success:
                 if logger:
-                    logger.info(f"Successfully formalized API: {api_name}")
+                    logger.debug(f"Successfully formalized API: {api_name}")
                 return True
             else:
                 if logger:

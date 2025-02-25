@@ -88,8 +88,8 @@ Wrap your JSON response with ```json and ``` markers.
 """
 
         if logger:
-            logger.info(f"Analyzing API: {api_name}")
-            logger.info(f"User prompt:\n{user_prompt}")
+            logger.debug(f"Analyzing API: {api_name}")
+            logger.model_input(f"User prompt:\n{user_prompt}")
 
         # Call LLM
         response = await _call_openai_completion_async(
@@ -99,7 +99,7 @@ Wrap your JSON response with ```json and ``` markers.
         )
 
         if logger:
-            logger.info(f"LLM response:\n{response}")
+            logger.model_output(f"LLM response:\n{response}")
 
         if not response:
             raise RuntimeError("Failed to get response from LLM")
@@ -143,7 +143,7 @@ Wrap your JSON response with ```json and ``` markers.
                     result.api_table_dependencies[api.name] = dependencies
                     
                     if logger:
-                        logger.info(f"API {api.name} depends on tables: {dependencies}")
+                        logger.debug(f"API {api.name} depends on tables: {dependencies}")
                         
                 except Exception as e:
                     if logger:
