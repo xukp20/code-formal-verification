@@ -33,6 +33,15 @@ lean_lib «{{name}}» {
 '''
 
 @dataclass
+class LoadSettings:
+    """Configuration for what content to load"""
+    table_code: bool = False
+    message_description: bool = False
+    planner_description: bool = False
+    message_typescript: bool = False
+    message_code: bool = True  # Default to True for backward compatibility
+
+@dataclass
 class ProjectStructure:
     """项目结构"""
     name: str
@@ -132,7 +141,12 @@ class ProjectStructure:
             return cls.from_dict(json.load(f))
 
     @classmethod
-    def parse_project(cls, project_name: str, base_path: str, lean_base_path: str) -> 'ProjectStructure':
+    def parse_project(cls, 
+                     project_name: str, 
+                     base_path: str, 
+                     lean_base_path: str,
+                     load_settings: LoadSettings = LoadSettings()) -> 'ProjectStructure':
+        """Parse project structure with configurable loading settings"""
         base = Path(base_path)
         doc_path = base / project_name / project_name
         code_path = base / f"{project_name}Code"
@@ -150,7 +164,8 @@ class ProjectStructure:
             service = cls._parse_service(
                 service_name,
                 service_dir,
-                code_path / service_name
+                code_path / service_name,
+                load_settings
             )
             services.append(service)
             
@@ -165,7 +180,11 @@ class ProjectStructure:
         )
     
     @staticmethod
-    def _parse_service(service_name: str, doc_dir: Path, code_dir: Path) -> ServiceInfo:
+    def _parse_service(service_name: str, 
+                      doc_dir: Path, 
+                      code_dir: Path,
+                      load_settings: LoadSettings) -> ServiceInfo:
+        """Parse service with configurable loading settings"""
         # 解析API
         apis = []
         api_root = doc_dir / f"{service_name}-APIRoot"
@@ -176,34 +195,58 @@ class ProjectStructure:
             api_name = message_dir.name.replace("Message", "")
             planner_dir = message_dir / f"{api_name}MessagePlanner"
             
-            # 读取yaml文件
-            message_yaml = yaml.safe_load((message_dir / f"{api_name}Message.yaml").read_text())
-            planner_yaml = yaml.safe_load((planner_dir / f"{api_name}MessagePlanner.yaml").read_text())
-            
-            # 读取Planner代码
+            # Required: Planner code
             planner_code = None
             planner_path = code_dir / "src/main/scala/Impl" / service_name / f"{api_name}MessagePlanner.scala"
             if planner_path.exists():
                 planner_code = planner_path.read_text()
-                
-            # 读取TypeScript代码
-            ts_code = None
-            ts_path = message_dir / f"{api_name}Message.tsx"
-            if ts_path.exists():
-                ts_code = ts_path.read_text()
-                
-            # 读取Message Scala代码
+            else:
+                raise ValueError(f"Planner code not found for API {api_name} in service {service_name}")
+            
+            # Optional components based on settings
+            message_description = None
+            planner_description = None
+            message_typescript = None
             message_code = None
-            message_path = code_dir / "src/main/scala/APIs" / service_name / f"{api_name}Message.scala"
-            if message_path.exists():
-                message_code = message_path.read_text()
+            
+            # Load message description if configured
+            if load_settings.message_description:
+                message_yaml_path = message_dir / f"{api_name}Message.yaml"
+                if message_yaml_path.exists():
+                    message_description = yaml.safe_load(message_yaml_path.read_text())
+                else:
+                    print(f"Warning: Message description not found for API {api_name}")
+            
+            # Load planner description if configured
+            if load_settings.planner_description:
+                planner_yaml_path = planner_dir / f"{api_name}MessagePlanner.yaml"
+                if planner_yaml_path.exists():
+                    planner_description = yaml.safe_load(planner_yaml_path.read_text())
+                else:
+                    print(f"Warning: Planner description not found for API {api_name}")
+            
+            # Load TypeScript code if configured
+            if load_settings.message_typescript:
+                ts_path = message_dir / f"{api_name}Message.tsx"
+                if ts_path.exists():
+                    message_typescript = ts_path.read_text()
+                else:
+                    print(f"Warning: TypeScript code not found for API {api_name}")
+            
+            # Load Message code if configured
+            if load_settings.message_code:
+                message_path = code_dir / "src/main/scala/APIs" / service_name / f"{api_name}Message.scala"
+                if message_path.exists():
+                    message_code = message_path.read_text()
+                else:
+                    print(f"Warning: Message code not found for API {api_name}")
                 
             apis.append(APIInfo(
                 name=api_name,
-                message_description=message_yaml,
-                planner_description=planner_yaml,
+                message_description=message_description,
+                planner_description=planner_description,
                 planner_code=planner_code,
-                message_typescript=ts_code,
+                message_typescript=message_typescript,
                 message_code=message_code
             ))
             
@@ -215,13 +258,18 @@ class ProjectStructure:
                 continue
                 
             table_name = table_dir.name
+            
+            # Required: Table description
             table_yaml = yaml.safe_load((table_dir / f"{table_name}.yaml").read_text())
             
-            # 读取Table代码
+            # Optional: Table code
             table_code = None
-            table_scala = table_dir / f"{table_name}.scala"
-            if table_scala.exists():
-                table_code = table_scala.read_text()
+            if load_settings.table_code:
+                table_scala = table_dir / f"{table_name}.scala"
+                if table_scala.exists():
+                    table_code = table_scala.read_text()
+                else:
+                    print(f"Warning: Table code not found for table {table_name}")
                 
             tables.append(TableInfo(
                 name=table_name,
@@ -448,14 +496,14 @@ class ProjectStructure:
         lines = []
         lines.append(f"\n#### {api.name}")
                     
-        if include_description:
+        if include_description and api.message_description:
             lines.append("\n##### Message Description")
             lines.append("---")
             lines.append("```yaml")
             lines.append(yaml.dump(api.message_description, allow_unicode=True))
             lines.append("```")
         
-        if include_description:
+        if include_description and api.planner_description:
             lines.append("\n##### Planner Description")
             lines.append("---")
             lines.append("```yaml")

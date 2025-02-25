@@ -42,8 +42,8 @@ class TableInfo(JSONSerializable):
 class APIInfo(JSONSerializable):
     """API信息"""
     name: str
-    message_description: dict  # message yaml content
-    planner_description: dict  # planner yaml content
+    message_description: Optional[dict] = None  # message yaml content
+    planner_description: Optional[dict] = None  # planner yaml content
     planner_code: Optional[str] = None  # scala code if exists
     message_typescript: Optional[str] = None  # typescript code if exists
     message_code: Optional[str] = None  # scala message code if exists
@@ -64,8 +64,8 @@ class APIInfo(JSONSerializable):
     def from_dict(cls, data: Dict[str, Any]) -> 'APIInfo':
         return cls(
             name=data["name"],
-            message_description=data["message_description"],
-            planner_description=data["planner_description"],
+            message_description=data.get("message_description"),
+            planner_description=data.get("planner_description"),
             planner_code=data.get("planner_code"),
             message_typescript=data.get("message_typescript"),
             message_code=data.get("message_code"),

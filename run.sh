@@ -10,8 +10,8 @@ export PYTHONPATH=$(pwd)
 
 model="qwen-max-latest"
 
-# project_name="UserAuthenticationProject11"
-project_name="SimpleCalculatorBackend"
+project_name="UserAuthenticationProject11"
+# project_name="SimpleCalculatorBackend"
 
 project_base_path="source_code"
 lean_base_path="lean_project"

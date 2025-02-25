@@ -9,7 +9,7 @@ from enum import Enum, auto
 from typing import Optional
 import datetime
 
-from src.utils.parse_project.parser import ProjectStructure
+from src.utils.parse_project.parser import ProjectStructure, LoadSettings
 from src.pipeline.table.types import TableDependencyInfo, TableFormalizationInfo
 from src.pipeline.table.analyzer import TableDependencyAnalyzer
 from src.pipeline.table.formalizer import TableFormalizer
@@ -65,7 +65,8 @@ class FormalizationPipeline:
                  project_base_path: str,
                  lean_base_path: str,
                  output_base_path: str,
-                 model: str = "deepseek-r1",
+                 load_settings: LoadSettings,
+                 model: str = "qwen-max-latest",
                  table_formalizer_retries: int = 3,
                  api_formalizer_retries: int = 5,
                  log_level: str = "INFO",
@@ -81,6 +82,7 @@ class FormalizationPipeline:
         self.api_formalizer_retries = api_formalizer_retries
         self.continue_from = continue_from
         self.start_state = PipelineState[start_state] if start_state else None
+        self.load_settings = load_settings
         
         # Create output directory
         self.output_path.mkdir(parents=True, exist_ok=True)
@@ -280,16 +282,36 @@ def main():
     parser.add_argument("--start-state", choices=[s.name for s in PipelineState],
                       help="Start from specific state (requires --continue)")
     
+    # Add loading settings arguments
+    parser.add_argument("--load-table-code", action="store_true",
+                      help="Load table Scala code")
+    parser.add_argument("--load-message-description", action="store_true",
+                      help="Load API message descriptions")
+    parser.add_argument("--load-planner-description", action="store_true",
+                      help="Load API planner descriptions")
+    parser.add_argument("--load-message-typescript", action="store_true",
+                      help="Load API TypeScript message definitions")
+    
     args = parser.parse_args()
     
     if args.start_state and not args.continue_from:
         parser.error("--start-state requires --continue")
+    
+    # Create LoadSettings
+    load_settings = LoadSettings(
+        table_code=args.load_table_code,
+        message_description=args.load_message_description,
+        planner_description=args.load_planner_description,
+        message_typescript=args.load_message_typescript,
+        message_code=True  # Always True for API formalization
+    )
     
     pipeline = FormalizationPipeline(
         project_name=args.project_name,
         project_base_path=args.project_base_path,
         lean_base_path=args.lean_base_path,
         output_base_path=args.output_base_path,
+        load_settings=load_settings,
         model=args.model,
         table_formalizer_retries=args.table_formalizer_retries,
         api_formalizer_retries=args.api_formalizer_retries,
