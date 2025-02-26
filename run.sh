@@ -10,7 +10,7 @@ export PYTHONPATH=$(pwd)
 
 model="qwen-max-latest"
 
-project_name="UserAuthenticationProject11"
+project_name="BankAccount8"
 # project_name="SimpleCalculatorBackend"
 
 project_base_path="source_code"
@@ -20,8 +20,8 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-# task="formalization"
-task="theorem_generation"
+task="formalization"
+# task="theorem_generation"
 
 if [ "$task" == "formalization" ]; then
     python src/pipeline/formalization_pipeline.py \

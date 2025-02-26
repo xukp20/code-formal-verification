@@ -221,7 +221,7 @@ Make sure you have "### Output\n```json" in your response so that I can parse th
             
             # Combine code
             current_theorems =  info.get_table_theorems(table_name) or []
-            full_code = f"{prefix}\n\n{'\n\n'.join(current_theorems)}\n\n{'\n\n'.join(theorems)}"
+            full_code = prefix + "\n\n" + "\n\n".join(current_theorems) + "\n\n" + "\n\n".join(theorems)
             
             # Try to compile
             success, error_message = await self._try_compile(
