@@ -12,6 +12,7 @@ import datetime
 from src.utils.parse_project.parser import ProjectStructure
 from src.pipeline.theorem.api.generator import APIRequirementGenerator
 from src.pipeline.theorem.api.types import APIRequirementGenerationInfo
+from src.pipeline.api.types import APIFormalizationInfo
 
 # Define custom log levels
 MODEL_INPUT = 15  # Between DEBUG and INFO
@@ -133,30 +134,35 @@ class TheoremGenerationPipeline:
         self.logger.info(f"Starting theorem generation pipeline for project: {self.project_name}")
         
         try:
+            # Load formalization results first
+            self.logger.info("Loading formalization results...")
+            formalization_path = Path(self.project_base_path) / self.project_name / "formalization" / "api_formalization.json"
+            if not formalization_path.exists():
+                raise FileNotFoundError(f"Formalization results not found at: {formalization_path}")
+            
+            formalization_info = APIFormalizationInfo.load(formalization_path)
+            self.logger.info("Formalization results loaded successfully")
+            
             # Determine starting state
             start_state = self._validate_continuation()
             self.logger.info(f"Starting from state: {start_state.name}")
             
-            # 1. Load project structure from formalization results
-            project = None
+            # 1. Initialize project structure
             if start_state <= PipelineState.INIT:
-                self.logger.info("1. Loading project structure from formalization results...")
-                formalization_path = Path(self.project_base_path) / self.project_name / "formalization" / "api_formalization.json"
-                with open(formalization_path) as f:
-                    data = json.load(f)
-                    project = ProjectStructure.from_dict(data["project"])
+                self.logger.info("1. Initializing project structure...")
+                # Save project structure separately for easier access
+                project_path = self.output_path / "project_structure.json"
+                formalization_info.project.save(project_path)
                 self._save_state(PipelineState.INIT)
-                self.logger.info("Project structure loaded successfully")
+                self.logger.info("Project structure initialized")
 
             # 2. Generate API requirements
             api_requirements = None
             if start_state <= PipelineState.API_REQUIREMENTS:
                 self.logger.info("2. Generating API requirements...")
-                if not project:
-                    project = ProjectStructure.load(self.output_path / "project_structure.json")
                 generator = APIRequirementGenerator(model=self.model)
                 api_requirements = await generator.run(
-                    project=project,
+                    project=formalization_info.project,
                     doc_path=self.doc_path,
                     output_path=self.output_path,
                     logger=self.logger

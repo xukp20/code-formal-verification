@@ -92,7 +92,7 @@ class APIRequirementGenerationInfo(JSONSerializable):
         """Save requirement generation info to output directory"""
         save_path = self.output_path / "api_requirements.json"
         with open(save_path, 'w') as f:
-            json.dump(self.to_dict(), f, indent=2)
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     @classmethod
     def load(cls, output_path: Path) -> 'APIRequirementGenerationInfo':
@@ -121,4 +121,4 @@ class APIRequirementGenerationInfo(JSONSerializable):
             }
             for service in self.project.services
         }
-        return json.dumps(template, indent=2) 
+        return json.dumps(template, indent=2, ensure_ascii=False)

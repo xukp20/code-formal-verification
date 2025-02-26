@@ -38,17 +38,23 @@ Given an API's documentation, generate a list of specific requirements that need
 
 Background:
 We need to verify API functionality by checking:
-1. Input validation requirements
+Given
+1. Input requirements
 2. Database state requirements
-3. Response requirements
-4. Database update requirements
+Then what will be:
+1. The response
+2. The database update
+You should follow the documentation and generate the requirements based on the input and database state.
 
-Each requirement should be a clear, testable statement about what the API must do, explaning under what kinds of inputs and input database states, the API must response what kind of outputs and give out what kind of database updates.
+a. Each requirement should be a clear, testable statement about what the API must do, explaning under what kinds of inputs and input database states, the API must response what kind of outputs and give out what kind of database updates.
 
 For example:
 - If the user is not in the database, even the register should success and return a success message, and the user should be added to the database.
 - If the user is already in the database, the register should fail and return a failure message, with the database unchanged.
 
+b. Don't add extra requirements that are not mentioned in the documentation.
+c. For the response message, you don't need to be too specific about the String, just explain what does the response mean.
+d. All in English.
 
 Output Format:
 First a reasoning process, then a JSON list between ```json and ``` markers, where each item is a requirement statement.
