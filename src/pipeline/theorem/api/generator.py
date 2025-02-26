@@ -154,7 +154,7 @@ Documentation:
             logger.info(f"Reading documentation from: {doc_path}")
 
         # Initialize result structure from formalization info
-        info = APIRequirementGenerationInfo.from_formalization(formalization_info, output_path)
+        info = APIRequirementGenerationInfo.from_formalization(formalization_info)
 
         # Split API documentation
         info.api_docs = await self.split_api_docs(info, doc_path, logger)
