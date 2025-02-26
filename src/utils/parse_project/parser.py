@@ -293,7 +293,7 @@ class ProjectStructure:
     def init_lean(self) -> Tuple[bool, str]:
         """初始化Lean项目"""
         # create the lean base path if not exists
-        self.lean_base_path.mkdir(parents=True, exist_ok=True)
+        Path(self.lean_base_path).mkdir(parents=True, exist_ok=True)
         
         try:
             # 1. 使用lake创建新项目
