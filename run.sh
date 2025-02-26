@@ -8,6 +8,11 @@ export https_proxy="http://127.0.0.1:7890"
 # Set PYTHONPATH to include the src directory
 export PYTHONPATH=$(pwd)
 
+# create outputs and lean_project if not exists
+mkdir -p outputs
+mkdir -p lean_project
+
+
 model="qwen-max-latest"
 
 project_name="BankAccount8"
