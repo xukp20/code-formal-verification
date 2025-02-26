@@ -41,16 +41,18 @@ class TheoremAPIInfo(APIInfo):
     """API info with theorem related fields"""
     lean_test_code: Optional[str] = None  # Complete lean test file content
     lean_theorems: List[str] = None  # Individual theorem snippets
-    
+    lean_prefix: Optional[str] = None  # Lean prefix for the API
+
     def __post_init__(self):
         if self.lean_theorems is None:
             self.lean_theorems = []
-    
+
     def to_dict(self) -> Dict[str, Any]:
         base_dict = super().to_dict()
         base_dict.update({
             "lean_test_code": self.lean_test_code,
-            "lean_theorems": self.lean_theorems
+            "lean_theorems": self.lean_theorems,
+            "lean_prefix": self.lean_prefix
         })
         return base_dict
     
@@ -65,7 +67,8 @@ class TheoremAPIInfo(APIInfo):
             message_code=data.get("message_code"),
             lean_code=data.get("lean_code"),
             lean_test_code=data.get("lean_test_code"),
-            lean_theorems=data.get("lean_theorems", [])
+            lean_theorems=data.get("lean_theorems", []),
+            lean_prefix=data.get("lean_prefix")
         )
 
 @dataclass
@@ -185,6 +188,35 @@ class TheoremProjectStructure(ProjectStructure):
         
         # Update Basic.lean
         self._update_basic_lean()
+
+    def set_test_lean_prefix(self, kind: str, service_name: str, name: str, prefix: str) -> None:
+        """Set test lean prefix"""
+        if kind.lower() == "table":
+            table = self._find_table(name)
+            if not table:
+                raise ValueError(f"Table {name} not found")
+            table.lean_prefix = prefix
+        elif kind.lower() == "api":
+            api = self._find_api(service_name, name)
+            if not api:
+                raise ValueError(f"API {name} not found in service {service_name}")
+            api.lean_prefix = prefix
+        else:
+            raise ValueError(f"Unknown kind: {kind}")
+    
+    def get_test_lean_prefix(self, kind: str, service_name: str, name: str) -> str:
+        """Get test lean prefix"""
+        if kind.lower() == "table":
+            table = self._find_table(name)
+            if not table:
+                raise ValueError(f"Table {name} not found")
+            return table.lean_prefix
+        elif kind.lower() == "api":
+            api = self._find_api(service_name, name)
+            if not api:
+                raise ValueError(f"API {name} not found in service {service_name}")
+            return api.lean_prefix
+        raise ValueError(f"Unknown kind: {kind}")
 
     def get_test_lean_path(self, kind: str, service_name: str, name: str) -> Path:
         """Get test lean file path"""

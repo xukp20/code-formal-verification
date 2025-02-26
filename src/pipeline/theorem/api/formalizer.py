@@ -17,6 +17,8 @@ You are a theorem formalizer for Lean 4 code, specializing in converting API req
 
 Task:
 Convert an API requirement description into a formal theorem in Lean 4, based on existing API implementations and theorems.
+You are given the existing file and the import prefix, you only have to update the import prefix to add new imports that you need in the theorem.
+Also, return the new theorem, and the other ones will be kept unchanged.
 
 Background:
 1. Code Structure:
@@ -50,41 +52,52 @@ Output Format:
    - Note any assumptions or edge cases
 
 2. Code Sections:
-### Full Code
+### Import Prefix
 ```lean
-<complete file content including imports and all theorems>
+<only imports and opens needed for all theorems>
 ```
 
 ### Theorem Code
 ```lean
-<only the new theorem, optioanl comment, then starting from 'theorem' keyword, use sorry for all proofs>
+<only the new theorem, optional comment, then starting from 'theorem' keyword, use sorry for all proofs>
 ```
 
 Requirements:
-1. Theorem Formalization:
+1. Import Prefix:
+   - Only include necessary imports and opens
+   - Don't repeat any code other than imports/opens
+   - Keep existing imports and add new ones if needed
+   - Use correct import paths as provided
+
+2. Theorem Code:
+   - Only include the new theorem
+   - Don't repeat existing theorems
+   - Use 'sorry' for all proofs
+
+3. Theorem Formalization:
    - Use precise Lean 4 syntax
    - Make theorem names descriptive and unique
    - Include all necessary type parameters
    - Specify clear pre and post conditions
    - You should not change the existing theorems, only add the new one, but you can add new imports or other prefixes if needed 
 
-2. Type Safety:
+4. Type Safety:
    - Use correct types from API and table definitions
    - Handle all possible return types
    - Consider nullable fields
    - Respect type constraints
 
-3. State Handling:
+5. State Handling:
    - Track database state changes
    - Maintain table invariants
 
-4. Error Cases:
+6. Error Cases:
    - Include error conditions
    - Specify error messages
    - Handle all possible failure modes
    - Maintain system consistency
 
-5. Style Guidelines:
+7. Style Guidelines:
    - Use clear variable names
    - Add comments for complex logic
    - Follow Lean 4 naming conventions
@@ -96,6 +109,9 @@ Remember:
 - Maintain consistency with existing theorems
 - Use existing definitions when possible
 - Use sorry for all proofs
+
+You can write draft code in the analysis section, and then you can write the final code in the theorem code section.
+Comments are welcome before the theorem definition in the theorem code section.
 """
 
     def __init__(self, 
@@ -153,7 +169,7 @@ Remember:
                                    api_name: str,
                                    requirement: str,
                                    info: APITheoremGenerationInfo,
-                                   logger: Optional[Logger] = None) -> Optional[str]:
+                                   logger: Optional[Logger] = None) -> Optional[tuple[str, str]]:
         """Formalize a single requirement into a theorem"""
         if logger:
             logger.info(f"Formalizing requirement for {service_name}.{api_name}: {requirement}")
@@ -191,18 +207,20 @@ Remember:
             
             # Extract theorem code
             try:
-                full_code = response.split("### Full Code\n```lean")[1].split("```")[0].strip()
+                prefix = response.split("### Import Prefix\n```lean")[1].split("```")[0].strip()
                 theorem_code = response.split("### Theorem Code\n```lean")[1].split("```")[0].strip()
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to parse model response: {e}")
                 continue
-
-            if logger:
-                logger.model_output(full_code)
-                logger.model_output(theorem_code)
             
-            # Try to compile
+            # Try to compile with new prefix and theorem
+            theorems = info.get_api_theorems(service_name, api_name) or []
+            theorems_str = "\n\n".join(theorems)
+            
+            # Combine prefix and theorems
+            full_code = f"{prefix}\n\n{theorems_str}\n\n{theorem_code}"
+            
             success, error_message = await self._try_compile(
                 service_name=service_name,
                 api_name=api_name,
@@ -221,6 +239,8 @@ Remember:
                     name=api_name,
                     theorem=theorem_code
                 )
+                # Update prefix and return theorem
+                info.project.set_test_lean_prefix("api", service_name, api_name, prefix)
                 return full_code, theorem_code
             
             # Update history and create retry prompt
@@ -241,17 +261,16 @@ Please fix the Lean code. Make sure to:
 
 Please provide your response in the same format:
 Analysis of the error and your fixes
-### Full Code
+### Import Prefix
 ```lean
-<complete corrected file>
+<updated imports and opens>
 ```
 ### Theorem Code
 ```lean
 <corrected theorem only, use sorry for all proofs>
 ```
 
-Please make sure you have '### Full Code\n```lean' and '### Theorem Code\n```lean' in your response so that I can find the Lean code easily.
-You must not omit any part of the full code, because I will use that to directly cover the old one.
+Please make sure you have '### Import Prefix\n```lean' and '### Theorem Code\n```lean' in your response so that I can find the Lean code easily.
 """
             
             if logger:
@@ -260,14 +279,7 @@ You must not omit any part of the full code, because I will use that to directly
         if logger:
             logger.error(f"Failed to formalize requirement after {self.max_retries} attempts")
         
-        # add null to the theorems list
-        info.project.add_test_lean_theorem(
-            kind="api",
-            service_name=service_name,
-            name=api_name,
-            theorem=None
-        )
-        return None, None
+        return None
 
     def _prepare_context(self, service_name: str, api_name: str, requirement: str, 
                         info: APITheoremGenerationInfo) -> Dict:
@@ -284,6 +296,7 @@ You must not omit any part of the full code, because I will use that to directly
             "requirement": requirement,
             "api_code": api.lean_code,
             "api_code_path": info.project.get_lean_import_path("api", service_name, api_name),
+            "current_prefix": info.project.get_test_lean_prefix("api", service_name, api_name) or "",
             "current_theorems": api.lean_test_code or "",
             "current_theorems_path": info.project.get_test_lean_import_path("api", service_name, api_name),
             "dependencies": {
@@ -342,15 +355,19 @@ Import path: {context['current_theorems_path']}
 {context['current_theorems']}
 ```
 
-Dependencies:
+Current import prefix:
+```lean
+{context['current_prefix']}
+```
 
+Dependencies:
 {self._format_dependencies_prompt(context['dependencies'])}
 
 Please ensure all import statements use the exact paths provided above.
 Remember to use sorry for all proofs.
 
-Please make sure you have '### Full Code\n```lean' and '### Theorem Code\n```lean' in your response so that I can find the Lean code easily.
-You must not omit any part of the full code, because I will use that to directly cover the old one.
+You must not change any existing theorems, only add imports if needed and the new theorem.
+Please make sure you have '### Import Prefix\n```lean' and '### Theorem Code\n```lean' in your response so that I can find the Lean code easily.
 """
 
     async def _try_compile(self,
@@ -369,7 +386,7 @@ You must not omit any part of the full code, because I will use that to directly
             # Try to build
             success, message = info.project.build()
 
-            # input("Press Enter to continue...")
+            input("Press Enter to continue...")
             
             if not success:
                 if logger:
@@ -420,7 +437,7 @@ You must not omit any part of the full code, because I will use that to directly
                 logger.info(f"Processing requirement {req_idx + 1}/{len(requirements)}")
             
             # Try to formalize
-            full_code, theorem_code = await self._formalize_requirement(
+            theorem_code = await self._formalize_requirement(
                 service_name=service_name,
                 api_name=api_name,
                 requirement=requirement,
@@ -428,14 +445,14 @@ You must not omit any part of the full code, because I will use that to directly
                 logger=logger
             )
             
-            if not full_code or not theorem_code:
+            if not theorem_code:
                 success = False
 
             if logger:
                 logger.info(f"Formalization result: success={success}")
                 # print the api theorem code and the theorems
                 logger.info(f"API theorem code: {info.project.get_test_lean('api', service_name, api_name)}")
-                logger.info(f"API theorems: {info.get_api_theorems(service_name, api_name)}")
+                logger.info(f"API theorems: {json.dumps(info.get_api_theorems(service_name, api_name), indent=2)}")
 
         if success:
             info.add_formalized_theorem_api(service_name, api_name)
