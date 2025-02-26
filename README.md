@@ -75,4 +75,39 @@ You need to run formalization first, then theorem generation.
 
 ## Code Structure
 
-TODO
+### src/pipeline
+
+#### Formalization Pipeline
+There is `api` and `table` subdirs in the `pipeline` dir, for the first task
+
+First, in `table`, we have `analyzer.py` to analyze the dependencies between the tables, and `formalizer.py` to formalize the tables.
+
+Then, in `api`, we have `table_analyzer.py` to analyze the dependencies between the APIs and the tables, and `api_analyzer.py` to analyze the dependencies between the APIs. Then the `formalizer.py` to formalize the APIs.
+
+All the logic are in the `formalization_pipeline.py` file.
+
+#### Theorem Generation Pipeline
+
+For the second task, in `theorem`, we still have `api` and `table`, called in this order:
+- `api/generator.py` to generate the requirements for each of the APIs
+- `table/analyzer.py` to analyze the properties of the tables
+- `api/formalizer.py` to formalize the theorems for the APIs
+- `table/formalizer.py` to formalize the theorems for the tables
+
+All the logic are in the `theorem_generation_pipeline.py` file.
+
+### src/utils
+
+#### lean
+
+legacy
+
+#### apis
+
+For the routing and handling of the LLM API calls.
+
+#### parse_project
+
+The base class to parse the input project, with the doc and scala code. 
+
+Project level lean support are implemented inside the `ProjectStructure` and its subclasses, so that it is always consistent with a real lean project (default to `lean_project/project_name`).
