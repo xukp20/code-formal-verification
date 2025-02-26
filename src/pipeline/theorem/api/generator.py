@@ -95,7 +95,8 @@ First a reasoning process, then a JSON list between ```json and ``` markers, whe
         response = await _call_openai_completion_async(
             model=self.model,
             system_prompt=self.DOC_SPLIT_SYSTEM_PROMPT,
-            user_prompt=user_prompt
+            user_prompt=user_prompt,
+            temperature=0.0
         )
 
         if logger:
@@ -128,7 +129,8 @@ Documentation:
         response = await _call_openai_completion_async(
             model=self.model,
             system_prompt=self.REQUIREMENT_GEN_SYSTEM_PROMPT,
-            user_prompt=user_prompt
+            user_prompt=user_prompt,
+            temperature=0.0
         )
 
         if logger:
@@ -188,5 +190,5 @@ Documentation:
             info.api_requirements[service.name] = service_requirements
 
         # Save results
-        info.save()
+        info.save(output_path)
         return info 

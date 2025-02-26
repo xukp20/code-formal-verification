@@ -27,6 +27,7 @@ Convert the given API implementation into Lean 4 code following these specific r
    - All the imports should be in the front of the file
    - You can open the imported namespace to use the types without prefix
    - Example: `import ProjectName.Database.TableName`
+   - You should define a namespace for current file, and put all the code in the namespace, so that other files can open the namespace to use the types without prefix
 
 2. Database Operations
    - For each table accessed (read or write):
@@ -179,7 +180,8 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
                 model=self.model,
                 system_prompt=self.SYSTEM_PROMPT,
                 user_prompt=user_prompt,
-                history=history
+                history=history,
+                temperature=0.0
             )
 
             if logger:

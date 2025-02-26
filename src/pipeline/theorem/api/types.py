@@ -57,7 +57,6 @@ class APIRequirementGenerationInfo(APIFormalizationInfo):
     """Complete API requirement generation information extending formalization results"""
     api_docs: Dict[str, Dict[str, str]] = None  # service -> api -> doc
     api_requirements: Dict[str, Dict[str, APIRequirementInfo]] = None  # service -> api -> requirements
-    output_path: Path = None
 
     def __post_init__(self):
         if self.api_docs is None:
@@ -78,12 +77,12 @@ class APIRequirementGenerationInfo(APIFormalizationInfo):
                     for api, info in apis.items()
                 }
                 for service, apis in self.api_requirements.items()
-            }
+            },
         })
         return result
 
     @classmethod
-    def from_formalization(cls, formalization_info: APIFormalizationInfo, output_path: Path) -> 'APIRequirementGenerationInfo':
+    def from_formalization(cls, formalization_info: APIFormalizationInfo) -> 'APIRequirementGenerationInfo':
         """Create from formalization results"""
         return cls(
             project=formalization_info.project,
@@ -96,11 +95,10 @@ class APIRequirementGenerationInfo(APIFormalizationInfo):
             formalized_apis=formalization_info.formalized_apis,
             api_docs={},
             api_requirements={},
-            output_path=output_path
         )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], output_path: Path) -> 'APIRequirementGenerationInfo':
+    def from_dict(cls, data: Dict[str, Any]) -> 'APIRequirementGenerationInfo':
         # Create instance using parent class method first
         instance = APIFormalizationInfo.from_dict(data)
         
@@ -126,22 +124,20 @@ class APIRequirementGenerationInfo(APIFormalizationInfo):
             formalized_apis=instance.formalized_apis,
             api_docs=api_docs,
             api_requirements=api_requirements,
-            output_path=output_path
         )
 
-    def save(self) -> None:
+    def save(self, output_path: Path) -> None:
         """Save requirement generation info to output directory"""
-        save_path = self.output_path / "api_requirements.json"
+        save_path = output_path / "api_requirements.json"
         with open(save_path, 'w') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     @classmethod
     def load(cls, path: Path) -> 'APIRequirementGenerationInfo':
         """Load requirement generation info from file"""
-        output_path = path.parent
         with open(path) as f:
             data = json.load(f)
-        return cls.from_dict(data, output_path)
+        return cls.from_dict(data)
 
     def format_project_structure(self) -> str:
         """Format project structure as markdown"""

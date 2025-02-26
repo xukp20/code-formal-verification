@@ -17,6 +17,8 @@ from src.pipeline.theorem.table.analyzer import TablePropertiesAnalyzer
 from src.pipeline.theorem.table.types import TablePropertiesInfo
 from src.pipeline.theorem.api.theorem_types import APITheoremGenerationInfo
 from src.pipeline.theorem.api.formalizer import APITheoremFormalizer
+from src.pipeline.theorem.table.formalizer import DBTheoremFormalizer
+from src.pipeline.theorem.table.theorem_types import TableTheoremGenerationInfo
 
 # Define custom log levels
 MODEL_INPUT = 15  # Between DEBUG and INFO
@@ -42,7 +44,8 @@ class PipelineState(Enum):
     API_REQUIREMENTS = 0
     TABLE_PROPERTIES = 1
     API_THEOREMS = 2
-    COMPLETED = 3
+    TABLE_THEOREMS = 3
+    COMPLETED = 4
 
     def __le__(self, other):
         if not isinstance(other, PipelineState):
@@ -162,6 +165,7 @@ class TheoremGenerationPipeline:
         analyzer = TablePropertiesAnalyzer(model=self.model)
         table_properties = await analyzer.run(
             requirements_info=requirements_info,
+            output_path=self.output_path,
             logger=self.logger
         )
         self._save_state(PipelineState.TABLE_PROPERTIES)
@@ -184,10 +188,32 @@ class TheoremGenerationPipeline:
         # Run formalization
         result = await formalizer.run(
             info=theorem_info,
+            output_path=self.output_path,
             logger=self.logger
         )
         
         self.logger.info("API theorem generation completed")
+        return result
+
+    async def _run_table_theorems(self, theorem_info: APITheoremGenerationInfo) -> TableTheoremGenerationInfo:
+        """Run database theorem generation step"""
+        self.logger.info("Starting database theorem generation")
+        
+        # Create formalizer
+        formalizer = DBTheoremFormalizer(
+            model=self.model,
+            max_retries=self.api_theorem_max_retries
+        )
+        
+        theorem_info = TableTheoremGenerationInfo.from_api_theorem_generation_info(theorem_info)
+        # Run formalization
+        result = await formalizer.run(
+            info=theorem_info,
+            output_path=self.output_path,
+            logger=self.logger
+        )
+        
+        self.logger.info("Database theorem generation completed")
         return result
 
     async def run(self):
@@ -227,6 +253,10 @@ class TheoremGenerationPipeline:
             theorem_info = await self._run_api_theorems(table_properties)
         else:
             theorem_info = APITheoremGenerationInfo.load(self.output_path / "api_theorems.json")
+        
+        # 4. Generate DB theorems
+        if start_state <= PipelineState.TABLE_THEOREMS:
+            theorem_info = await self._run_table_theorems(theorem_info)
         
         self._save_state(PipelineState.COMPLETED)
         self.logger.info("Theorem generation pipeline completed successfully")

@@ -100,7 +100,8 @@ Service: {service_name}
         response = await _call_openai_completion_async(
             model=self.model,
             system_prompt=self.SYSTEM_PROMPT,
-            user_prompt=user_prompt
+            user_prompt=user_prompt,
+            temperature=0.0
         )
 
         if logger:
@@ -136,6 +137,7 @@ Service: {service_name}
 
     async def run(self,
                  requirements_info: APIRequirementGenerationInfo,
+                 output_path: Path,
                  logger: Optional[Logger] = None) -> TablePropertiesInfo:
         """Analyze properties for all tables in the project"""
         if logger:
@@ -200,5 +202,5 @@ Service: {service_name}
                 result.table_properties[service.name] = service_properties
 
         # Save results
-        result.save()
+        result.save(output_path)
         return result 

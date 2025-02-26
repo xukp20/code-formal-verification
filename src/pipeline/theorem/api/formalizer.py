@@ -194,7 +194,8 @@ Comments are welcome before the theorem definition in the theorem code section.
                 system_prompt=self.SYSTEM_PROMPT,
                 user_prompt=current_prompt,
                 history=history,
-                model=self.model
+                model=self.model,
+                temperature=0.0
             )
             
             if not response:
@@ -241,7 +242,7 @@ Comments are welcome before the theorem definition in the theorem code section.
                 )
                 # Update prefix and return theorem
                 info.project.set_test_lean_prefix("api", service_name, api_name, prefix)
-                return full_code, theorem_code
+                return theorem_code
             
             # Update history and create retry prompt
             history.extend([
@@ -386,7 +387,7 @@ Please make sure you have '### Import Prefix\n```lean' and '### Theorem Code\n``
             # Try to build
             success, message = info.project.build()
 
-            input("Press Enter to continue...")
+            # input("Press Enter to continue...")
             
             if not success:
                 if logger:
@@ -461,6 +462,7 @@ Please make sure you have '### Import Prefix\n```lean' and '### Theorem Code\n``
 
     async def run(self,
                   info: APITheoremGenerationInfo,
+                  output_path: Path,
                   logger: Optional[Logger] = None) -> APITheoremGenerationInfo:
         """Run the complete formalization process"""
         if logger:
@@ -480,7 +482,7 @@ Please make sure you have '### Import Prefix\n```lean' and '### Theorem Code\n``
             await self.formalize_api_theorem(service_name, api_name, info, logger)
             
             # Save progress
-            info.save()
+            info.save(output_path)
         
         if logger:
             logger.info("API theorem formalization completed")

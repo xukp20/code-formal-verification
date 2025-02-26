@@ -46,7 +46,8 @@ class TablePropertiesInfo(APIRequirementGenerationInfo):
                     for table, props in tables.items()
                 }
                 for service, tables in self.table_properties.items()
-            }
+            },
+
         })
         return result
     
@@ -64,14 +65,13 @@ class TablePropertiesInfo(APIRequirementGenerationInfo):
             formalized_apis=requirements_info.formalized_apis,
             api_docs=requirements_info.api_docs,
             api_requirements=requirements_info.api_requirements,
-            output_path=requirements_info.output_path,
             table_properties={}
         )
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], output_path: Path) -> 'TablePropertiesInfo':
+    def from_dict(cls, data: Dict[str, Any]) -> 'TablePropertiesInfo':
         # Create instance using parent class method first
-        instance = APIRequirementGenerationInfo.from_dict(data, output_path)
+        instance = APIRequirementGenerationInfo.from_dict(data)
         
         # Add our fields
         table_properties = {
@@ -94,23 +94,21 @@ class TablePropertiesInfo(APIRequirementGenerationInfo):
             formalized_apis=instance.formalized_apis,
             api_docs=instance.api_docs,
             api_requirements=instance.api_requirements,
-            output_path=output_path,
             table_properties=table_properties
         )
     
-    def save(self) -> None:
+    def save(self, output_path: Path) -> None:
         """Save table properties info to output directory"""
-        save_path = self.output_path / "table_properties.json"
+        save_path = output_path / "table_properties.json"
         with open(save_path, 'w') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
     
     @classmethod
     def load(cls, path: Path) -> 'TablePropertiesInfo':
         """Load table properties info from file"""
-        output_path = path.parent
         with open(path) as f:
             data = json.load(f)
-        return cls.from_dict(data, output_path)
+        return cls.from_dict(data)
     
     def get_table_properties(self, service_name: str, table_name: str) -> List[TableProperty]:
         """Get properties for a specific table"""

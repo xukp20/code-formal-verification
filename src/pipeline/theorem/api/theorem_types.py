@@ -12,6 +12,7 @@ class TheoremTableInfo(TableInfo):
     """Table info with theorem related fields"""
     lean_test_code: Optional[str] = None  # Complete lean test file content
     lean_theorems: List[str] = None  # Individual theorem snippets
+    lean_prefix: Optional[str] = None  # Lean prefix for the table
     
     def __post_init__(self):
         if self.lean_theorems is None:
@@ -21,7 +22,8 @@ class TheoremTableInfo(TableInfo):
         base_dict = super().to_dict()
         base_dict.update({
             "lean_test_code": self.lean_test_code,
-            "lean_theorems": self.lean_theorems
+            "lean_theorems": self.lean_theorems,
+            "lean_prefix": self.lean_prefix
         })
         return base_dict
     
@@ -33,7 +35,8 @@ class TheoremTableInfo(TableInfo):
             table_code=data.get("table_code"),
             lean_code=data.get("lean_code"),
             lean_test_code=data.get("lean_test_code"),
-            lean_theorems=data.get("lean_theorems", [])
+            lean_theorems=data.get("lean_theorems", []),
+            lean_prefix=data.get("lean_prefix")
         )
 
 @dataclass
@@ -349,7 +352,6 @@ class APITheoremGenerationInfo(TablePropertiesInfo):
             api_docs=properties_info.api_docs,
             api_requirements=properties_info.api_requirements,
             table_properties=properties_info.table_properties,
-            output_path=properties_info.output_path,
             formalized_theorem_apis={}  # Initialize empty formalized APIs dict
         )
     
@@ -371,10 +373,17 @@ class APITheoremGenerationInfo(TablePropertiesInfo):
         if not api:
             raise ValueError(f"API {api_name} not found in service {service_name}")
         return api.lean_theorems
+
+    def get_table_theorems(self, table_name: str) -> List[Optional[str]]:
+        """Get theorems for a table"""
+        table = self.project._find_table(table_name)
+        if not table:
+            raise ValueError(f"Table {table_name} not found")
+        return table.lean_theorems
     
-    def save(self) -> None:
+    def save(self, output_path: Path) -> None:
         """Save theorem generation info to output directory"""
-        save_path = self.output_path / "api_theorems.json"
+        save_path = output_path / "api_theorems.json"
         with open(save_path, 'w') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
     

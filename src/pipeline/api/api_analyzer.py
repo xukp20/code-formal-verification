@@ -125,7 +125,8 @@ Example output format:
         response = await _call_openai_completion_async(
             model=self.model,
             system_prompt=self.SYSTEM_PROMPT,
-            user_prompt=user_prompt
+            user_prompt=user_prompt,
+            temperature=0.0
         )
 
         if not response:
