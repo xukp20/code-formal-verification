@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from pathlib import Path
 import json
 from src.utils.parse_project.types import JSONSerializable
-from src.utils.parse_project.parser import ProjectStructure
+from src.pipeline.api.types import APIFormalizationInfo
 
 @dataclass
 class APIDocInfo(JSONSerializable):
@@ -53,16 +53,24 @@ class APIRequirementInfo(JSONSerializable):
         )
 
 @dataclass
-class APIRequirementGenerationInfo(JSONSerializable):
-    """Complete API requirement generation information including project structure"""
-    project: ProjectStructure
-    api_docs: Dict[str, Dict[str, str]]  # service -> api -> doc
-    api_requirements: Dict[str, Dict[str, APIRequirementInfo]]  # service -> api -> requirements
-    output_path: Path
+class APIRequirementGenerationInfo(APIFormalizationInfo):
+    """Complete API requirement generation information extending formalization results"""
+    api_docs: Dict[str, Dict[str, str]] = None  # service -> api -> doc
+    api_requirements: Dict[str, Dict[str, APIRequirementInfo]] = None  # service -> api -> requirements
+    output_path: Path = None
+
+    def __post_init__(self):
+        if self.api_docs is None:
+            self.api_docs = {}
+        if self.api_requirements is None:
+            self.api_requirements = {}
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "project": self.project.to_dict(),
+        # Start with parent class dict
+        result = super().to_dict()
+        
+        # Add our fields
+        result.update({
             "api_docs": self.api_docs,
             "api_requirements": {
                 service: {
@@ -71,20 +79,53 @@ class APIRequirementGenerationInfo(JSONSerializable):
                 }
                 for service, apis in self.api_requirements.items()
             }
-        }
+        })
+        return result
+
+    @classmethod
+    def from_formalization(cls, formalization_info: APIFormalizationInfo, output_path: Path) -> 'APIRequirementGenerationInfo':
+        """Create from formalization results"""
+        return cls(
+            project=formalization_info.project,
+            dependencies=formalization_info.dependencies,
+            topological_order=formalization_info.topological_order,
+            formalized_tables=formalization_info.formalized_tables,
+            api_table_dependencies=formalization_info.api_table_dependencies,
+            api_dependencies=formalization_info.api_dependencies,
+            api_topological_order=formalization_info.api_topological_order,
+            formalized_apis=formalization_info.formalized_apis,
+            api_docs={},
+            api_requirements={},
+            output_path=output_path
+        )
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], output_path: Path) -> 'APIRequirementGenerationInfo':
+        # Create instance using parent class method first
+        instance = APIFormalizationInfo.from_dict(data)
+        
+        # Add our fields
+        api_docs = data.get("api_docs", {})
+        api_requirements = {
+            service: {
+                api: APIRequirementInfo.from_dict(info)
+                for api, info in apis.items()
+            }
+            for service, apis in data.get("api_requirements", {}).items()
+        }
+        
+        # Create new instance with all fields
         return cls(
-            project=ProjectStructure.from_dict(data["project"]),
-            api_docs=data["api_docs"],
-            api_requirements={
-                service: {
-                    api: APIRequirementInfo.from_dict(info)
-                    for api, info in apis.items()
-                }
-                for service, apis in data["api_requirements"].items()
-            },
+            project=instance.project,
+            dependencies=instance.dependencies,
+            topological_order=instance.topological_order,
+            formalized_tables=instance.formalized_tables,
+            api_table_dependencies=instance.api_table_dependencies,
+            api_dependencies=instance.api_dependencies,
+            api_topological_order=instance.api_topological_order,
+            formalized_apis=instance.formalized_apis,
+            api_docs=api_docs,
+            api_requirements=api_requirements,
             output_path=output_path
         )
 
@@ -95,10 +136,10 @@ class APIRequirementGenerationInfo(JSONSerializable):
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     @classmethod
-    def load(cls, output_path: Path) -> 'APIRequirementGenerationInfo':
-        """Load requirement generation info from output directory"""
-        load_path = output_path / "api_requirements.json"
-        with open(load_path) as f:
+    def load(cls, path: Path) -> 'APIRequirementGenerationInfo':
+        """Load requirement generation info from file"""
+        output_path = path.parent
+        with open(path) as f:
             data = json.load(f)
         return cls.from_dict(data, output_path)
 

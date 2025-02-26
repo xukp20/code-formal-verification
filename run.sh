@@ -37,7 +37,8 @@ elif [ "$task" == "theorem_generation" ]; then
         --doc-path $doc_path \
         --output-base-path $output_base_path \
         --log-level $log_level \
-        --log-model-io
+        --log-model-io \
+        --continue
 else
     echo "Invalid task: $task"
     exit 1

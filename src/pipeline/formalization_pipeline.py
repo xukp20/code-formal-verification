@@ -125,22 +125,27 @@ class FormalizationPipeline:
                 "timestamp": str(datetime.datetime.now())
             }, f)
 
-    def _load_state(self) -> Optional[PipelineState]:
-        """Load saved pipeline state"""
+    def _get_current_state(self) -> Optional[PipelineState]:
+        """Get the current pipeline state from saved state file"""
         state_file = self.output_path / "pipeline_state.json"
         if not state_file.exists():
             return None
         try:
             with open(state_file) as f:
                 data = json.load(f)
-                return PipelineState[data["state"]]
+            current_state = PipelineState[data["state"]]
+            # Move to the next state since the current state is completed
+            next_state_value = current_state.value + 1
+            if next_state_value < len(PipelineState):
+                return PipelineState(next_state_value)
+            return PipelineState.COMPLETED
         except Exception as e:
             self.logger.error(f"Failed to load pipeline state: {e}")
             return None
 
     def _validate_continuation(self) -> PipelineState:
         """Validate and determine the starting state"""
-        current_state = self._load_state()
+        current_state = self._get_current_state()
         
         if not self.continue_from:
             return PipelineState.INIT

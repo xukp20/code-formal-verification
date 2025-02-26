@@ -6,6 +6,7 @@ from logging import Logger
 
 from src.utils.parse_project.parser import ProjectStructure
 from src.utils.apis.langchain_client import _call_openai_completion_async
+from src.pipeline.api.types import APIFormalizationInfo
 from src.pipeline.theorem.api.types import (
     APIDocInfo, APIRequirementInfo, APIRequirementGenerationInfo
 )
@@ -141,28 +142,23 @@ Documentation:
             raise ValueError(f"Failed to parse requirement generation response for {api_name}: {e}")
 
     async def run(self,
-                 project: ProjectStructure,
+                 formalization_info: APIFormalizationInfo,
                  doc_path: Path,
                  output_path: Path,
                  logger: Optional[Logger] = None) -> APIRequirementGenerationInfo:
         """Generate requirements for all APIs in the project"""
         if logger:
-            logger.info(f"Generating requirements for project: {project.name}")
+            logger.info(f"Generating requirements for project: {formalization_info.project.name}")
             logger.info(f"Reading documentation from: {doc_path}")
 
-        # Initialize result structure
-        info = APIRequirementGenerationInfo(
-            project=project,
-            api_docs={},
-            api_requirements={},
-            output_path=output_path
-        )
+        # Initialize result structure from formalization info
+        info = APIRequirementGenerationInfo.from_formalization(formalization_info, output_path)
 
         # Split API documentation
         info.api_docs = await self.split_api_docs(info, doc_path, logger)
 
         # Generate requirements for each API
-        for service in project.services:
+        for service in info.project.services:
             if logger:
                 logger.info(f"Processing service: {service.name}")
                 

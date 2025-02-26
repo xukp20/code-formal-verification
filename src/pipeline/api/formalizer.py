@@ -56,7 +56,8 @@ Convert the given API implementation into Lean 4 code following these specific r
    - Use these types to represent success/failure states
    - Include meaningful messages in constructors
    - ! Never use panic! to handle errors, always use a defined error type and return all the way to the top level api function
-
+   - Don't need to use IO to wrap the return value, just return the value directly
+   
 4. Implementation Fidelity
    - !Top1 priority: The formalized code should be semantically equivalent to the original code, in the level of each line of code
    - Base the formalization on the Planner code
