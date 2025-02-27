@@ -6,6 +6,7 @@ import argparse
 import subprocess
 import json
 from src.utils.parse_project.types import TableInfo, APIInfo, ServiceInfo
+from src.utils.lean.build_parser import parse_build_output_to_messages, parse_lean_message_details
 
 
 # 默认配置模板
@@ -422,8 +423,88 @@ class ProjectStructure:
             return self.lean_project_name + ".Service." + service_name + "." + name
         raise ValueError(f"Unknown kind: {kind}")
 
-    def build(self) -> Tuple[bool, str]:
-        """构建Lean项目"""
+    def _get_error_context(self, relative_path: str, line: int, column: int) -> str:
+        """Get context lines around an error
+        
+        Args:
+            relative_path: Path relative to project root
+            line: Line number (1-based)
+            column: Column number (1-based)
+            
+        Returns:
+            String containing the context lines with error marked
+        """
+        file_path = self.lean_project_path / relative_path
+        
+        try:
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+                
+            # Get context lines (line numbers are 1-based)
+            line_idx = line - 1
+            context_lines = []
+            
+            # Add previous line if exists
+            if line_idx > 0:
+                context_lines.append(lines[line_idx - 1].rstrip())
+                
+            # Add error line with marker
+            error_line = lines[line_idx].rstrip()
+            marked_line = (
+                error_line[:column-1] + 
+                "[error]" + 
+                error_line[column-1:]
+            )
+            context_lines.append(marked_line)
+            
+            # Add next line if exists
+            if line_idx < len(lines) - 1:
+                context_lines.append(lines[line_idx + 1].rstrip())
+                
+            return "\n".join(context_lines)
+            
+        except Exception as e:
+            return f"Failed to get context: {str(e)}"
+
+    def _format_error_message(self, 
+                            error_info: Dict[str, str], 
+                            add_context: bool = False) -> str:
+        """Format error information as markdown
+        
+        Args:
+            error_info: Dict containing error details
+            add_context: Whether to include file context
+            
+        Returns:
+            Formatted markdown string
+        """
+        # Convert file path to import path
+        file_path = error_info["file"]
+        import_path = file_path.replace("/", ".").replace(".lean", "")
+        
+        if add_context:
+            return f"""### File Path
+{import_path}
+
+### Context ([error] marks the error position)
+```lean
+{self._get_error_context(file_path, error_info["line"], error_info["column"])}
+```
+
+### Content
+{error_info["content"]}"""
+        else:
+            return f"""### File Path
+{import_path}
+
+### Line: Column
+{error_info["line"]}: {error_info["column"]}
+
+### Content
+{error_info["content"]}"""
+
+    def _run_lake_build(self) -> Tuple[bool, str]:
+        """Run Lake build and return success and output"""
         try:
             result = subprocess.run(
                 ['lake', 'build'],
@@ -437,6 +518,42 @@ class ProjectStructure:
             
         except Exception as e:
             return False, f"Build failed: {str(e)}"
+        
+    def build(self, 
+              parse: bool = False, 
+              only_errors: bool = False,
+              add_context: bool = False) -> Tuple[bool, str]:
+        """Build the Lean project
+        
+        Args:
+            parse: Whether to parse Lake output
+            only_errors: Only include errors in parsed output
+            add_context: Include file context in error messages
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        # Run Lake build
+        success, output = self._run_lake_build()
+        
+        if not parse:
+            return success, output
+            
+        # Parse Lake output
+        messages = parse_build_output_to_messages(output)
+        details = parse_lean_message_details(messages, only_errors=only_errors)
+        
+        if not details:
+            return success, "No errors or warnings found" if success else "Build failed with no parseable errors"
+            
+        # Format messages
+        formatted_messages = []
+        for detail in details:
+            formatted_messages.append(
+                self._format_error_message(detail, add_context)
+            )
+            
+        return success, "\n\n".join(formatted_messages)
 
     def _find_table(self, name: str) -> Optional[TableInfo]:
         """查找表"""
@@ -647,63 +764,67 @@ def main():
     print(success, message)
 
     # Try build
-    success, message = project.build()
+    # success, message = project.build()
+    # print(success, message)
+
+    # Try get error context
+    success, message = project.build(parse=True, add_context=True, only_errors=True)
     print(success, message)
 
-    # Add a table
-    project.set_lean("table", "UserAuthService", "User", """
-def user := "user"
-""")
+#     # Add a table
+#     project.set_lean("table", "UserAuthService", "User", """
+# def user := "user"
+# """)
     
-    # Try build again
-    success, message = project.build()
-    print(success, message)
+#     # Try build again
+#     success, message = project.build()
+#     print(success, message)
 
-    print("Project structure:")
-    print(project.print_lean_structure())
+#     print("Project structure:")
+#     print(project.print_lean_structure())
 
-    # Add an api
-    project.set_lean("api", "UserAuthService", "UserLogin", """
-import UserAuthenticationProject11.Database.User
+#     # Add an api
+#     project.set_lean("api", "UserAuthService", "UserLogin", """
+# import UserAuthenticationProject11.Database.User
 
-def userLogin (name: String) : IO Unit := do
-    IO.println s!\"User {name} logged in successfully.\"
-""")
+# def userLogin (name: String) : IO Unit := do
+#     IO.println s!\"User {name} logged in successfully.\"
+# """)
     
-    # Try build again
-    success, message = project.build()
-    print(success, message)
+#     # Try build again
+#     success, message = project.build()
+#     print(success, message)
 
-    print("Project structure:")
-    print(project.print_lean_structure())
+#     print("Project structure:")
+#     print(project.print_lean_structure())
 
-    # Try get table code, path
-    print("Testing get table code, path")
-    table_code = project.get_lean("table", "UserAuthService", "User")
-    print(table_code)   
-    table_path = project.get_lean_path("table", "UserAuthService", "User")
-    print(table_path)
-    table_import_path = project.get_lean_import_path("table", "UserAuthService", "User")
-    print(table_import_path)
+#     # Try get table code, path
+#     print("Testing get table code, path")
+#     table_code = project.get_lean("table", "UserAuthService", "User")
+#     print(table_code)   
+#     table_path = project.get_lean_path("table", "UserAuthService", "User")
+#     print(table_path)
+#     table_import_path = project.get_lean_import_path("table", "UserAuthService", "User")
+#     print(table_import_path)
 
-    print("Testing get api code, path")
-    api_code = project.get_lean("api", "UserAuthService", "UserLogin")
-    print(api_code)
-    api_path = project.get_lean_path("api", "UserAuthService", "UserLogin")
-    print(api_path)
-    api_import_path = project.get_lean_import_path("api", "UserAuthService", "UserLogin")
-    print(api_import_path)
+#     print("Testing get api code, path")
+#     api_code = project.get_lean("api", "UserAuthService", "UserLogin")
+#     print(api_code)
+#     api_path = project.get_lean_path("api", "UserAuthService", "UserLogin")
+#     print(api_path)
+#     api_import_path = project.get_lean_import_path("api", "UserAuthService", "UserLogin")
+#     print(api_import_path)
 
-    # save md file
-    output_path = Path(args.base_path) / f"{args.project_name}_fake_lean_code.md"
-    output_path.write_text(project.to_markdown(), encoding='utf-8')
+#     # save md file
+#     output_path = Path(args.base_path) / f"{args.project_name}_fake_lean_code.md"
+#     output_path.write_text(project.to_markdown(), encoding='utf-8')
 
-    # save project
-    project.save_project(Path(args.base_path) / f"{args.project_name}_fake_lean_code.json")
+#     # save project
+#     project.save_project(Path(args.base_path) / f"{args.project_name}_fake_lean_code.json")
 
-    # load project
-    project = ProjectStructure.load_project(Path(args.base_path) / f"{args.project_name}_fake_lean_code.json")
-    print(project)
+#     # load project
+#     project = ProjectStructure.load_project(Path(args.base_path) / f"{args.project_name}_fake_lean_code.json")
+#     print(project)
 
 if __name__ == "__main__":
     main()

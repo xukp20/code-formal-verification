@@ -32,4 +32,8 @@ export MDOEL="qwen-max-latest"
 
 # python src/pipeline/api/test_api_analyzer.py
 
-python src/pipeline/api/test_formalizer.py
+# python src/pipeline/api/test_formalizer.py
+
+# python src/utils/lean/build_parser.py
+
+python src/utils/parse_project/parser.py
