@@ -72,7 +72,8 @@ class FormalizationPipeline:
                  log_level: str = "INFO",
                  log_model_io: bool = False,
                  continue_from: str = None,
-                 start_state: str = None):
+                 start_state: str = None,
+                 add_mathlib: bool = False):
         self.project_name = project_name
         self.project_base_path = project_base_path
         self.lean_base_path = lean_base_path
@@ -83,7 +84,7 @@ class FormalizationPipeline:
         self.continue_from = continue_from
         self.start_state = PipelineState[start_state] if start_state else None
         self.load_settings = load_settings
-        
+        self.add_mathlib = add_mathlib
         # Create output directory
         self.output_path.mkdir(parents=True, exist_ok=True)
         
@@ -178,10 +179,11 @@ class FormalizationPipeline:
                     base_path=self.project_base_path + "/" + self.project_name,
                     lean_base_path=self.lean_base_path
                 )
-                init_success = project.init_lean()
+                init_success = project.init_lean(add_mathlib=self.add_mathlib)
                 if not init_success:
                     self.logger.warning("Failed to initialize Lean project")
-                    return False
+                    self.logger.warning("Please check the Lean project path and the project structure, trying to continue")
+                
                 self._save_state(PipelineState.INIT)
                 self.logger.info("Project structure parsed successfully")
 
@@ -297,6 +299,9 @@ def main():
     parser.add_argument("--load-message-typescript", action="store_true",
                       help="Load API TypeScript message definitions")
     
+    # Lean settings
+    parser.add_argument("--add-mathlib", action="store_true",
+                      help="Add mathlib to Lean project")
     args = parser.parse_args()
     
     if args.start_state and not args.continue_from:

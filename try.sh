@@ -36,4 +36,5 @@ export MDOEL="qwen-max-latest"
 
 # python src/utils/lean/build_parser.py
 
+export PACKAGE_PATH=.cache/packages
 python src/utils/parse_project/parser.py

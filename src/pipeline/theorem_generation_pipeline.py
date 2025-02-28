@@ -74,7 +74,8 @@ class TheoremGenerationPipeline:
         self.project_name = project_name
         self.project_base_path = project_base_path
         self.doc_path = Path(doc_path)
-        self.output_path = Path(output_base_path) / project_name / "theorem_generation"
+        self.output_base_path = Path(output_base_path)
+        self.output_path = self.output_base_path / project_name / "theorem_generation"
         self.model = model
         self.continue_from = continue_from
         self.start_state = PipelineState[start_state] if start_state else None
@@ -150,7 +151,7 @@ class TheoremGenerationPipeline:
         self.logger.info("1. Generating API requirements...")
         generator = APIRequirementGenerator(model=self.model)
         api_requirements = await generator.run(
-            formalization_info=APIFormalizationInfo.load(Path(self.project_base_path) / self.project_name / "formalization" / "api_formalization.json"),
+            formalization_info=APIFormalizationInfo.load(Path(self.output_base_path) / self.project_name / "formalization" / "api_formalization.json"),
             doc_path=self.doc_path,
             output_path=self.output_path,
             logger=self.logger
@@ -226,7 +227,7 @@ class TheoremGenerationPipeline:
         
         # Load formalization results first
         self.logger.info("Loading formalization results...")
-        formalization_path = Path(self.project_base_path) / self.project_name / "formalization" / "api_formalization.json"
+        formalization_path = Path(self.output_base_path) / self.project_name / "formalization" / "api_formalization.json"
         if not formalization_path.exists():
             raise FileNotFoundError(f"Formalization results not found at: {formalization_path}")
         
@@ -268,7 +269,7 @@ def main():
     
     parser.add_argument("--project-name", required=True,
                       help="Name of the project to analyze")
-    parser.add_argument("--project-base-path", default=None,
+    parser.add_argument("--project-base-path", default="source_code",
                       help="Base path containing formalization results")
     parser.add_argument("--doc-path", required=True,
                       help="Path to the project documentation file")
@@ -292,9 +293,6 @@ def main():
     
     args = parser.parse_args()
 
-    if not args.project_base_path:
-        args.project_base_path = args.output_base_path
-        
     if args.start_state and not args.continue_from:
         parser.error("--start-state requires --continue")
     

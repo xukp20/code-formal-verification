@@ -332,10 +332,14 @@ class APITheoremGenerationInfo(TablePropertiesInfo):
         if instance.project:
             instance.project = TheoremProjectStructure.from_project(instance.project)
         
+        # Fill in the project
+        instance.project.services = [TheoremServiceInfo.from_dict(service) for service in data.get("project", {}).get("services", [])]
         # Add our fields
         instance.formalized_theorem_apis = data.get("formalized_theorem_apis", {})
         
-        return instance
+        return cls(
+            **instance.__dict__
+        )
     
     @classmethod
     def from_properties(cls, properties_info: TablePropertiesInfo) -> 'APITheoremGenerationInfo':
@@ -390,7 +394,6 @@ class APITheoremGenerationInfo(TablePropertiesInfo):
     @classmethod
     def load(cls, path: Path) -> 'APITheoremGenerationInfo':
         """Load theorem generation info from file"""
-        output_path = path.parent
         with open(path) as f:
             data = json.load(f)
         return cls.from_dict(data)

@@ -385,7 +385,7 @@ Please make sure you have '### Import Prefix\n```lean' and '### Theorem Code\n``
             info.project.set_test_lean("api", service_name, api_name, code)
             
             # Try to build
-            success, message = info.project.build()
+            success, message = info.project.build(parse=True, add_context=True, only_errors=True)
 
             # input("Press Enter to continue...")
             

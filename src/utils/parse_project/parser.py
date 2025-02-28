@@ -7,17 +7,9 @@ import subprocess
 import json
 from src.utils.parse_project.types import TableInfo, APIInfo, ServiceInfo
 from src.utils.lean.build_parser import parse_build_output_to_messages, parse_lean_message_details
-
-
-# 默认配置模板
-LAKE_MANIFEST_TEMPLATE = {
-    "version": "1.1.0",
-    "packagesDir": ".lake/packages",
-    "packages": [],
-    "lakeDir": ".lake"
-}
-
-
+import os
+import shutil
+import time
 LAKEFILE_TEMPLATE = '''
 import Lake
 open Lake DSL
@@ -31,6 +23,22 @@ lean_lib «{{name}}» {
   -- add library configuration options here
 }
 
+'''
+
+LAKEFILE_TEMPLATE_WITH_MATHLIB = '''
+import Lake
+open Lake DSL
+
+require "leanprover-community" / "mathlib"
+
+package {{name}} {
+  -- add package configuration options here
+}
+
+@[default_target]
+lean_lib «{{name}}» {
+  -- add library configuration options here
+}
 '''
 
 @dataclass
@@ -291,7 +299,7 @@ class ProjectStructure:
             init_code=init_code
         )
 
-    def init_lean(self) -> Tuple[bool, str]:
+    def init_lean(self, add_mathlib: bool = False) -> Tuple[bool, str]:
         """初始化Lean项目"""
         # create the lean base path if not exists
         Path(self.lean_base_path).mkdir(parents=True, exist_ok=True)
@@ -314,13 +322,17 @@ class ProjectStructure:
                 (self.package_path / dir_name).mkdir(parents=True, exist_ok=True)
 
             # 3. 修改配置文件
-            manifest_path = self.lean_project_path / "lake-manifest.json"
-            manifest_content = LAKE_MANIFEST_TEMPLATE.copy()
-            manifest_content["name"] = self.lean_project_name
-            manifest_path.write_text(json.dumps(manifest_content, indent=2))
+            # manifest_path = self.lean_project_path / "lake-manifest.json"
+            # manifest_content = LAKE_MANIFEST_TEMPLATE.copy()
+            # manifest_content["name"] = self.lean_project_name
+            # manifest_path.write_text(json.dumps(manifest_content, indent=2))
             
             lakefile_path = self.lean_project_path / "lakefile.lean"
-            lakefile_content = LAKEFILE_TEMPLATE.replace("{{name}}", self.lean_project_name)
+            if add_mathlib:
+                lakefile_content = LAKEFILE_TEMPLATE_WITH_MATHLIB.replace("{{name}}", self.lean_project_name)
+            else:
+                lakefile_content = LAKEFILE_TEMPLATE.replace("{{name}}", self.lean_project_name)
+        
             lakefile_path.write_text(lakefile_content)
             
             # 4. 删除Main.lean，清空Basic.lean
@@ -332,6 +344,17 @@ class ProjectStructure:
             root_lean_path.write_text(f"import {self.lean_project_name}.Basic")
             
             self._update_basic_lean()
+
+            # update and build
+            self._try_copy_package()
+
+            success, message = self._run_lake_update()
+            if not success:
+                return False, message
+            
+            success, message = self._run_lake_build()
+            if not success:
+                return False, message
 
             return True, "Successfully initialized Lean project"
             
@@ -503,14 +526,57 @@ class ProjectStructure:
 ### Content
 {error_info["content"]}"""
 
+    def _try_copy_package(self) -> Tuple[bool, str]:
+        """Try to copy package to lean_project"""
+        # load package_path from env
+        package_path = os.getenv("PACKAGE_PATH")
+        if package_path:
+            start_time = time.time()
+            print(f"Copying package to {self.lean_project_path / '.lake'}")
+            # mkdir .lake in the lean project path
+            (self.lean_project_path / ".lake").mkdir(parents=True, exist_ok=True)
+            # package_path is the dir "packages", copy it with the content to .lake
+            shutil.copytree(package_path, self.lean_project_path / ".lake" / "packages")
+            end_time = time.time()
+            print(f"Copying package to {self.lean_project_path / '.lake'} took {end_time - start_time} seconds")
+        
+    def _run_lake_update(self) -> Tuple[bool, str]:
+        """Run Lake update and return success and output"""
+        try: 
+            # set proxy
+            env = os.environ.copy()
+            
+            start_time = time.time()
+            result = subprocess.run(
+                ['lake', 'update'],
+                cwd=self.lean_project_path,
+                capture_output=True,
+                text=True,
+                env=env
+            )
+            success = result.returncode == 0
+            message = result.stdout
+            end_time = time.time()
+            print(f"Lake update took {end_time - start_time} seconds")
+            print("Lake update output:")
+            print(message)
+            return success, message
+            
+        except Exception as e:
+            return False, f"Update failed: {str(e)}"
+
     def _run_lake_build(self) -> Tuple[bool, str]:
         """Run Lake build and return success and output"""
         try:
+            # set proxy
+            env = os.environ.copy()
+
             result = subprocess.run(
                 ['lake', 'build'],
                 cwd=self.lean_project_path,
                 capture_output=True,
-                text=True
+                text=True,
+                env=env
             )
             success = result.returncode == 0
             message = result.stdout
@@ -522,7 +588,8 @@ class ProjectStructure:
     def build(self, 
               parse: bool = False, 
               only_errors: bool = False,
-              add_context: bool = False) -> Tuple[bool, str]:
+              add_context: bool = False,
+              only_first: bool = False) -> Tuple[bool, str]:
         """Build the Lean project
         
         Args:
@@ -542,6 +609,8 @@ class ProjectStructure:
         # Parse Lake output
         messages = parse_build_output_to_messages(output)
         details = parse_lean_message_details(messages, only_errors=only_errors)
+        if only_first:
+            details = details[:1]
         
         if not details:
             return success, "No errors or warnings found" if success else "Build failed with no parseable errors"
@@ -760,7 +829,7 @@ def main():
         print("Has Init code:", service.init_code is not None)
 
     # Try init
-    success, message = project.init_lean()
+    success, message = project.init_lean(add_mathlib=True)
     print(success, message)
 
     # Try build
@@ -768,8 +837,8 @@ def main():
     # print(success, message)
 
     # Try get error context
-    success, message = project.build(parse=True, add_context=True, only_errors=True)
-    print(success, message)
+    # success, message = project.build(parse=True, add_context=True, only_errors=True)
+    # print(success, message)
 
 #     # Add a table
 #     project.set_lean("table", "UserAuthService", "User", """

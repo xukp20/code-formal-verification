@@ -203,7 +203,7 @@ Please make sure you have '### Lean Code\n```lean' in your response so that I ca
             project.set_lean("api", service_name, api_name, lean_code)
 
             # Try to build
-            success, compilation_error = project.build()
+            success, compilation_error = project.build(parse=True, add_context=True, only_errors=True)
             if success:
                 if logger:
                     logger.debug(f"Successfully formalized API: {api_name}")

@@ -120,7 +120,7 @@ Requirements:
             info.project.set_test_lean("table", service_name, table_name, code)
             
             # Try to build
-            success, message = info.project.build()
+            success, message = info.project.build(parse=True, add_context=True, only_errors=True)
             
             if not success:
                 if logger:

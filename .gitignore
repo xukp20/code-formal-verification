@@ -175,3 +175,4 @@ source_code/
 outputs/
 data/
 lean_project/
+.cache/
