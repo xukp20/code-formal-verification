@@ -44,7 +44,7 @@ Output Format:
 ### Output
 ```json
 {
-    "import_prefix": "string",  // Additional imports needed
+    "import_prefix": "string",  // Add new necessary imports to the old import prefix
     "proof": "string"          // Complete theorem proof
 }
 ```
@@ -57,14 +57,14 @@ Requirements:
    - Use proper type annotations
    - Example:
     ```lean
-    theorem api_property : ∀ (input : InputType), PropertyType := by
-       -- First handle the input validation
+    theorem api_theorem : ∀ (input : InputType), PropertyType := by
         intro input
         unfold some_function
         have some_hypothesis : some_property input := by
             ...
         simp [some_hypothesis]
      ```
+
 2. Import Management:
    - Keep all existing imports
    - Add new imports only when needed
@@ -78,6 +78,7 @@ Requirements:
      import Mathlib.Data.List.Basic
      import ProjectName.Database.TableName
      ```
+    - Keep existing helper functions in the existing import prefix
 
 3. Proof Style:
    - First copy all the content of the theorem given to you, which means any helper functions or lemmas given to you before the declaration of the theorem.
@@ -271,7 +272,9 @@ Please make sure you have '### Output\n```json' in your response."""
 
             # Try to build
             # input("Press Enter to continue...")
-            success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=False)
+            # success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=False)
+            success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=True)
+            
             if success:
                 if logger:
                     logger.debug(f"Successfully proved theorem {theorem_idx} for API: {api_name}")

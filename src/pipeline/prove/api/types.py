@@ -32,6 +32,21 @@ class ProverTableInfo(BaseTheoremTableInfo):
         instance.proved_theorems = data.get("proved_theorems", [None] * len(instance.lean_theorems))
         return instance
 
+    # def update_test_code(self) -> None:
+    #     """Update lean_test_code based on current theorems and proofs"""
+    #     if not self.lean_prefix:
+    #         return
+            
+    #     code_parts = [self.lean_prefix]
+        
+    #     for idx, theorem in enumerate(self.lean_theorems):
+    #         if idx < len(self.proved_theorems) and self.proved_theorems[idx]:
+    #             code_parts.append(self.proved_theorems[idx])
+    #         else:
+    #             code_parts.append(theorem)
+                
+    #     self.lean_test_code = "\n\n".join(code_parts)
+
 @dataclass
 class ProverAPIInfo(BaseTheoremAPIInfo):
     """API info with theorem proofs"""
@@ -53,20 +68,20 @@ class ProverAPIInfo(BaseTheoremAPIInfo):
         instance.proved_theorems = data.get("proved_theorems", [None] * len(instance.lean_theorems))
         return instance
     
-    def update_test_code(self) -> None:
-        """Update lean_test_code based on current theorems and proofs"""
-        if not self.lean_prefix:
-            return
+    # def update_test_code(self) -> None:
+    #     """Update lean_test_code based on current theorems and proofs"""
+    #     if not self.lean_prefix:
+    #         return
             
-        code_parts = [self.lean_prefix]
+    #     code_parts = [self.lean_prefix]
         
-        for idx, theorem in enumerate(self.lean_theorems):
-            if idx < len(self.proved_theorems) and self.proved_theorems[idx]:
-                code_parts.append(self.proved_theorems[idx])
-            else:
-                code_parts.append(theorem)
+    #     for idx, theorem in enumerate(self.lean_theorems):
+    #         if idx < len(self.proved_theorems) and self.proved_theorems[idx]:
+    #             code_parts.append(self.proved_theorems[idx])
+    #         else:
+    #             code_parts.append(theorem)
                 
-        self.lean_test_code = "\n\n".join(code_parts)
+    #     self.lean_test_code = "\n\n".join(code_parts)
 
 @dataclass
 class ProverServiceInfo(BaseTheoremServiceInfo):
@@ -100,18 +115,28 @@ class ProverProjectStructure(BaseTheoremProjectStructure):
             package_path=project.package_path
         )
     
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ProverProjectStructure':
+        return cls(
+            name=data["name"],
+            base_path=Path(data["base_path"]),
+            services=[ProverServiceInfo.from_dict(service) for service in data["services"]],
+            lean_base_path=Path(data["lean_base_path"]),
+            lean_project_name=data["lean_project_name"],
+            lean_project_path=Path(data["lean_project_path"]),
+            package_path=Path(data["package_path"])
+        )
+    
     def set_theorem_proof(self, kind: str, service_name: str, name: str, idx: int, proof: str) -> None:
         """Set proof for a theorem"""
         if kind == "api":
             api = self._find_api(service_name, name)
             if api:
                 api.proved_theorems[idx] = proof
-                api.update_test_code()
         elif kind == "table":
             table = self._find_table(name)
             if table:
                 table.proved_theorems[idx] = proof
-                table.update_test_code()
     
     def del_theorem_proof(self, kind: str, service_name: str, name: str, idx: int) -> None:
         """Delete proof for a theorem"""
@@ -119,12 +144,10 @@ class ProverProjectStructure(BaseTheoremProjectStructure):
             api = self._find_api(service_name, name)
             if api:
                 api.proved_theorems[idx] = None
-                api.update_test_code()
         elif kind == "table":
             table = self._find_table(name)
             if table:
                 table.proved_theorems[idx] = None
-                table.update_test_code()
 
     def concat_test_lean_code(self, kind: str, service_name: str, name: str):
         """Concatenate test lean code for an API or table"""

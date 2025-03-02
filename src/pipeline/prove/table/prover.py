@@ -6,6 +6,7 @@ from logging import Logger
 from src.utils.apis.langchain_client import _call_openai_completion_async
 from src.utils.parse_project.parser import ProjectStructure
 from src.pipeline.prove.api.types import APIProverInfo, ProverProjectStructure
+from src.pipeline.prove.table.types import TableProverInfo
 
 class TableTheoremProver:
     """Prove theorems for formalized Table properties"""
@@ -43,7 +44,7 @@ Output Format:
 ### Output
 ```json
 {
-    "import_prefix": "string",  // Additional imports needed
+    "import_prefix": "string",  // Add new necessary imports to the old import prefix
     "proof": "string"          // Complete theorem proof
 }
 ```
@@ -54,6 +55,15 @@ Requirements:
    - Do not use Lean 3 syntax
    - Follow Lean 4 naming conventions
    - Use proper type annotations
+   - Example:
+    ```lean
+    theorem table_theorem : ∀ (input : InputType), PropertyType := by
+        intro input
+        unfold some_function
+        have some_hypothesis : some_property input := by
+            ...
+        simp [some_hypothesis]
+     ```
 
 2. Import Management:
    - Keep all existing imports
@@ -65,9 +75,10 @@ Requirements:
      import Mathlib.Data.List.Basic
      import ProjectName.Database.TableName
      ```
-   - Keep existing helper functions
+   - Keep existing helper functions in the existing import prefix
+   - ! You must make sure that the new import prefix include all the imports and helper functions in the existing import prefix
 
-3. Proof Style:
+   3. Proof Style:
    - Keep all theorem content given to you. including the comment before the theorem and the theorem declaration
    - Only replace 'sorry' with the proof
    - Add natural language comments before major steps
@@ -75,8 +86,7 @@ Requirements:
 
 4. Proof Completeness:
    - No 'sorry' allowed anywhere in the proof
-   - Prove all cases and conditions
-   - Handle all edge cases
+   - ! You should keep all the theorem content give to you, only replacing sorry with the proof.
 
 5. Error Handling:
    - If compilation fails, the error will be shown
@@ -108,15 +118,15 @@ you will be provided with chances to refine and fix the proof later.
         lines = ["# Dependencies\n"]
         
         # Add related API with its proofs
-        service, api = project._find_api_with_service(api_name)
+        service, api = project._find_api_with_service(api_name, service_name)
         if service and api:
             lines.append(f"## Related API: {api_name}")
             lines.append(f"### Implementation")
-            lines.append(f"Import Path: {project.get_lean_import_path('api', service, api_name)}")
+            lines.append(f"Import Path: {project.get_lean_import_path('api', service_name, api_name)}")
             lines.append(f"```lean\n{api.lean_code}\n```\n")
             if api.lean_test_code:
                 lines.append(f"### Theorems (You can use the theorems that have been proved)")
-                lines.append(f"Import Path: {project.get_test_lean_import_path('api', service, api_name)}")
+                lines.append(f"Import Path: {project.get_test_lean_import_path('api', service_name, api_name)}")
                 lines.append(f"```lean\n{api.lean_test_code}\n```\n")
         
         return "\n".join(lines)
@@ -162,7 +172,7 @@ Import Path: {project.get_test_lean_import_path('table', service_name, table_nam
                           history: List[Dict[str, str]] = None,
                           logger: Logger = None) -> bool:
         """Prove a single theorem"""
-        service, table = project._find_table_with_service(table_name, service_name=service_name)
+        service, table = project._find_table_with_service(table_name)
         if not service or not table:
             raise ValueError(f"Table {table_name} not found")
             
@@ -231,7 +241,7 @@ Please make sure you have '### Output\n```json' in your response."""
                 if logger:
                     logger.error(f"Failed to parse output: {e}")
                 compilation_error = str(e)
-                input("Press Enter to continue...")
+                # input("Press Enter to continue...")
                 continue
 
             # Update project structure
@@ -241,9 +251,9 @@ Please make sure you have '### Output\n```json' in your response."""
             project.set_test_lean("table", service_name, table_name, full_code)
 
             # Try to build
-            input("Press Enter to continue...")
+            # input("Press Enter to continue...")
 
-            success, compilation_error = project.build(parse=True, only_errors=True, add_context=True)
+            success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=True)
             if success:
                 if logger:
                     logger.debug(f"Successfully proved theorem {theorem_idx} for table {table_name}")
@@ -270,13 +280,16 @@ Please make sure you have '### Output\n```json' in your response."""
                  prover_info: APIProverInfo,
                  output_path: Path,
                  max_theorem_retries: int = 4,
-                 logger: Logger = None) -> APIProverInfo:
+                 logger: Logger = None) -> TableProverInfo:
         """Prove theorems for all tables in topological order"""
-        if not prover_info.topological_order:
+        # Convert APIProverInfo to TableProverInfo
+        table_prover_info = TableProverInfo.from_api_prover_info(prover_info)
+        
+        if not table_prover_info.topological_order:
             raise ValueError("No valid table topological order available")
 
-        for table_name in prover_info.topological_order:                
-            service, table = prover_info.project._find_table_with_service(table_name)
+        for table_name in table_prover_info.topological_order:
+            service, table = table_prover_info.project._find_table_with_service(table_name)
             service_name = service.name
             if not service or not table:
                 continue
@@ -286,7 +299,7 @@ Please make sure you have '### Output\n```json' in your response."""
                     continue
                 
                 # Get the related API for this theorem
-                api_name = prover_info.table_theorem_dependencies[service_name][table_name][idx]
+                api_name = table_prover_info.table_theorem_dependencies[service_name][table_name][idx]
                 
                 # Outer retry loop for fresh attempts
                 for attempt in range(max_theorem_retries):
@@ -295,7 +308,7 @@ Please make sure you have '### Output\n```json' in your response."""
                                   f"for theorem {idx} of table {table_name}")
                     
                     success = await self.prove_theorem(
-                        project=prover_info.project,
+                        project=table_prover_info.project,
                         service_name=service_name,
                         table_name=table_name,
                         theorem_idx=idx,
@@ -317,7 +330,7 @@ Please make sure you have '### Output\n```json' in your response."""
                     logger.error(f"Failed to prove theorem {idx} of table {table_name} "
                                f"after {max_theorem_retries} fresh attempts")
                 
-                # Save progress after each theorem attempt
-                prover_info.save(output_path)
+                # Save progress
+                table_prover_info.save(output_path)
 
-        return prover_info 
+        return table_prover_info 

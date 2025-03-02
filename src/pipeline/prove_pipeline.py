@@ -13,6 +13,7 @@ from src.pipeline.prove.api.prover import APIProver
 from src.pipeline.prove.api.types import APIProverInfo
 from src.pipeline.theorem.table.theorem_types import TableTheoremGenerationInfo
 from src.pipeline.prove.table.prover import TableTheoremProver
+from src.pipeline.prove.table.types import TableProverInfo
 
 # Define custom log levels
 MODEL_INPUT = 15  # Between DEBUG and INFO
@@ -182,17 +183,15 @@ class TheoremProvingPipeline:
         self.logger.info("API theorem proving completed")
         return result
 
-    async def _run_table_proofs(self, prover_info: APIProverInfo) -> APIProverInfo:
+    async def _run_table_proofs(self, prover_info: APIProverInfo) -> TableProverInfo:
         """Run table theorem proving step"""
         self.logger.info("Starting table theorem proving")
         
-        # Create prover
         prover = TableTheoremProver(
             model=self.model,
             max_retries=self.table_prover_max_retries
         )
         
-        # Run proving
         result = await prover.run(
             prover_info=prover_info,
             output_path=self.output_path,
@@ -227,10 +226,15 @@ class TheoremProvingPipeline:
         else:
             # Load previous API proving results
             prover_info = APIProverInfo.load(self.output_path / "api_proofs.json")
-        
+            # lok at the first table lean theorems
+            table = prover_info.project.services[0].tables[0]
+            
         # Run table theorem proving
         if start_state <= PipelineState.TABLE_PROOFS:
-            prover_info = await self._run_table_proofs(prover_info)
+            table_prover_info = await self._run_table_proofs(prover_info)
+        else:
+            # Load previous table proving results
+            table_prover_info = TableProverInfo.load(self.output_path / "table_proofs.json")
         
         self._save_state(PipelineState.COMPLETED)
         self.logger.info("Theorem proving pipeline completed successfully")
