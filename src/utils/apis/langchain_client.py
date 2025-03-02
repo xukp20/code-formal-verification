@@ -52,6 +52,8 @@ async def _call_openai_completion_async(
         # Add system message if provided
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+            # NOTE: We use user message to pass system prompt now
+            # messages.append({"role": "user", "content": system_prompt})
         
         # Add history messages if provided
         if history:
@@ -61,11 +63,12 @@ async def _call_openai_completion_async(
         if user_prompt:
             messages.append({"role": "user", "content": user_prompt})
 
-        # Create ChatOpenAI instance
+        # Create ChatOpenAI instance with a timeout of 120 seconds
         client = ChatOpenAI(
             model=model,
             openai_api_base=base_url,
             openai_api_key=api_key,
+            timeout=120,  # Set timeout to 120 seconds
             **kwargs
         )
 
@@ -133,11 +136,12 @@ def _call_openai_completion(
         if user_prompt:
             messages.append({"role": "user", "content": user_prompt})
 
-        # Create ChatOpenAI instance
+        # Create ChatOpenAI instance with a timeout of 60 seconds
         client = ChatOpenAI(
             model=model,
             openai_api_base=base_url,
             openai_api_key=api_key,
+            timeout=60,  # Set timeout to 60 seconds
             **kwargs
         )
 

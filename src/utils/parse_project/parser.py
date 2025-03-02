@@ -474,9 +474,9 @@ class ProjectStructure:
             # Add error line with marker
             error_line = lines[line_idx].rstrip()
             marked_line = (
-                error_line[:column-1] + 
+                error_line[:column] + 
                 "[error]" + 
-                error_line[column-1:]
+                error_line[column:]
             )
             context_lines.append(marked_line)
             
@@ -524,7 +524,9 @@ class ProjectStructure:
 {error_info["line"]}: {error_info["column"]}
 
 ### Content
-{error_info["content"]}"""
+{error_info["content"]}
+----------------------------------------------------
+"""
 
     def _try_copy_package(self) -> Tuple[bool, str]:
         """Try to copy package to lean_project"""

@@ -33,8 +33,8 @@ doc_path=$project_base_path/$project_name/"doc.md"
 log_level="DEBUG"
 
 # task="formalization"
-task="theorem_generation"
-# task="prove"
+# task="theorem_generation"
+task="prove"
 
 if [ "$task" == "formalization" ]; then
     command="python src/pipeline/formalization_pipeline.py \
@@ -43,7 +43,9 @@ if [ "$task" == "formalization" ]; then
 --lean-base-path $lean_base_path \
 --output-base-path $output_base_path \
 --log-level $log_level \
---log-model-io"
+--log-model-io \
+--model $model"
+
     if [ "$add_mathlib" == "true" ]; then
         command="$command --add-mathlib"
     fi
@@ -53,7 +55,11 @@ elif [ "$task" == "theorem_generation" ]; then
 --doc-path $doc_path \
 --output-base-path $output_base_path \
 --log-level $log_level \
---log-model-io"
+--log-model-io \
+--model $model \
+--continue \
+--start-state TABLE_THEOREMS"
+
 elif [ "$task" == "prove" ]; then
     command="python src/pipeline/prove_pipeline.py \
 --project-name $project_name \
@@ -61,7 +67,12 @@ elif [ "$task" == "prove" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---api-prover-max-retries 10"
+--api-prover-max-retries 4 \
+--table-prover-max-retries 4 \
+--model $model \
+--continue \
+--start-state TABLE_PROOFS"
+
 else
     echo "Invalid task: $task"
     exit 1

@@ -9,22 +9,38 @@ from pathlib import Path
 class TableTheoremGenerationInfo(APITheoremGenerationInfo):
     """Information about table theorem generation"""
     formalized_theorem_tables: List[str] = None  # List of tables with formalized theorems
+    table_theorem_dependencies: Dict[str, Dict[str, List[str]]] = None  
+    # service_name -> table_name -> [api_name for each theorem]
     
     def __post_init__(self):
         super().__post_init__()
         if self.formalized_theorem_tables is None:
             self.formalized_theorem_tables = []
+        if self.table_theorem_dependencies is None:
+            self.table_theorem_dependencies = {}
 
     def to_dict(self) -> Dict[str, Any]:
         base_dict = super().to_dict()
         base_dict["formalized_theorem_tables"] = self.formalized_theorem_tables
+        base_dict["table_theorem_dependencies"] = self.table_theorem_dependencies
         return base_dict
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TableTheoremGenerationInfo':
         instance = super().from_dict(data)
         instance.formalized_theorem_tables = data.get("formalized_theorem_tables")
+        instance.table_theorem_dependencies = data.get("table_theorem_dependencies", {})
         return instance
+    
+    def add_theorem_dependency(self, service_name: str, table_name: str,  
+                             api_name: str) -> None:
+        """Add API dependency for a table theorem"""
+        if service_name not in self.table_theorem_dependencies:
+            self.table_theorem_dependencies[service_name] = {}
+        if table_name not in self.table_theorem_dependencies[service_name]:
+            self.table_theorem_dependencies[service_name][table_name] = []
+        # Extend list if needed
+        self.table_theorem_dependencies[service_name][table_name].append(api_name)
     
     def add_formalized_theorem_table(self, table_name: str) -> None:
         """Add a table to the list of formalized tables"""
@@ -58,7 +74,8 @@ class TableTheoremGenerationInfo(APITheoremGenerationInfo):
             api_requirements=api_theorem_generation_info.api_requirements,
             table_properties=api_theorem_generation_info.table_properties,
             formalized_theorem_apis=api_theorem_generation_info.formalized_theorem_apis,
-            formalized_theorem_tables=[]
+            formalized_theorem_tables=[],
+            table_theorem_dependencies={}
         )
     
     def save(self, output_path: Path) -> None:

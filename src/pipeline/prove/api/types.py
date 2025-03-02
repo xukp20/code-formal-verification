@@ -185,7 +185,8 @@ class APIProverInfo(TableTheoremGenerationInfo):
             api_requirements=theorem_info.api_requirements,
             table_properties=theorem_info.table_properties,
             formalized_theorem_apis=theorem_info.formalized_theorem_apis,
-            formalized_theorem_tables=theorem_info.formalized_theorem_tables
+            formalized_theorem_tables=theorem_info.formalized_theorem_tables,
+            table_theorem_dependencies=theorem_info.table_theorem_dependencies
         )
     
     def save(self, output_path: Path) -> None:

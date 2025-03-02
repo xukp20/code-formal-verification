@@ -7,38 +7,37 @@ from src.utils.apis.langchain_client import _call_openai_completion_async
 from src.utils.parse_project.parser import ProjectStructure
 from src.pipeline.prove.api.types import APIProverInfo, ProverProjectStructure
 
-class APIProver:
-    """Prove theorems for formalized APIs"""
+class TableTheoremProver:
+    """Prove theorems for formalized Table properties"""
     
     SYSTEM_PROMPT = """
-You are a formal verification expert tasked with proving theorems about formalized APIs in Lean 4.
+You are a formal verification expert tasked with proving theorems about database table properties in Lean 4.
 
 Background:
 We have completed several formalization steps:
 1. Database tables are formalized as Lean 4 structures with their operations
 2. APIs are formalized as Lean 4 functions with precise input/output types
-3. Each API has a set of theorems describing its required properties
-4. Dependencies are ordered topologically, and theorems for dependent APIs are already proved
+3. Each API has a set of theorems that have been proved
+4. Each table property is related to exactly one API that modifies the table
+5. We need to prove how the table property holds when the API is called
 
-Your task is to prove a specific theorem about an API's behavior.
+Your task is to prove a specific theorem about a table property.
 
 Input:
-1. The API's Lean 4 implementation
-2. Complete theorem file including:
+1. The Table's Lean 4 implementation
+2. The related API's implementation and proved theorems
+3. Complete table theorem file including:
    - Proved theorems (with complete proofs)
    - Unproved theorems (marked with 'sorry')
-3. Current import prefix with existing dependencies
-4. Dependencies information:
-   - Table implementations and their properties
-   - Dependent APIs and their proved theorems
+4. Current import prefix with existing dependencies
 5. The specific theorem to prove
 
 Output Format:
 1. Analysis section explaining:
    - Theorem's meaning and requirements
+   - How the API's behavior affects the table property
    - Proof strategy and key steps
    - Required lemmas or helper functions
-   - A draft proof of full import prefix and the theorem to help you extract the json later
    
 2. JSON output with:
 ### Output
@@ -55,39 +54,29 @@ Requirements:
    - Do not use Lean 3 syntax
    - Follow Lean 4 naming conventions
    - Use proper type annotations
-   - Example:
-    ```lean
-    theorem api_property : ∀ (input : InputType), PropertyType := by
-       -- First handle the input validation
-        intro input
-        unfold some_function
-        have some_hypothesis : some_property input := by
-            ...
-        simp [some_hypothesis]
-     ```
+
 2. Import Management:
    - Keep all existing imports
    - Add new imports only when needed
-   - Use correct import paths for:
-     * Mathlib components
-     * Project-specific modules
-     * Dependent APIs and tables
+   - Use correct import paths
    - You are provided with Mathlib and its dependencies as outside packages in addition to the in project files
    - Example: 
      ```lean
      import Mathlib.Data.List.Basic
      import ProjectName.Database.TableName
      ```
+   - Keep existing helper functions
 
 3. Proof Style:
-   - First copy all the content of the theorem given to you, which means any helper functions or lemmas given to you before the declaration of the theorem.
-   - Also, keep the comment of the theorem given to you.
-   - In summary, you are not allowed to change the prefix or the declaration of the theorem, but only to remove the sorry mark and complete the proof after that.
+   - Keep all theorem content given to you. including the comment before the theorem and the theorem declaration
+   - Only replace 'sorry' with the proof
    - Add natural language comments before major steps
+   - Use the API's proved theorems when needed
 
 4. Proof Completeness:
    - No 'sorry' allowed anywhere in the proof
-   - ! You should keep all the theorem content give to you, only replacing sorry with the proof.
+   - Prove all cases and conditions
+   - Handle all edge cases
 
 5. Error Handling:
    - If compilation fails, the error will be shown
@@ -103,6 +92,7 @@ you will be provided with chances to refine and fix the proof later.
 - But remember never use sorry in the proof, if you want to provide part of the proof, just stop at that point without sorry after that.
 - You can use "rfl" to leave the unfinished steps with only the comment saying what to do next.
 - When asked to fix the proof, you should focus on the first error and keep the correct part of the proof to just rewrite the wrong part.
+
 """
 
     def __init__(self, model: str = "deepseek-r1", max_retries: int = 5):
@@ -111,64 +101,50 @@ you will be provided with chances to refine and fix the proof later.
 
     def _format_dependencies_prompt(self,
                                   project: ProverProjectStructure,
-                                  api_name: str,
-                                  table_deps: List[str],
-                                  api_deps: List[str]) -> str:
+                                  table_name: str,
+                                  service_name: str,
+                                  api_name: str) -> str:
         """Format the dependencies section of the prompt"""
         lines = ["# Dependencies\n"]
         
-        # Add table dependencies
-        if table_deps:
-            lines.append("## Table Dependencies")
-            for table_name in table_deps:
-                service, table = project._find_table_with_service(table_name)
-                if service and table:
-                    lines.append(f"### Table {table_name}")
-                    lines.append(f"Import Path: {project.get_lean_import_path('table', service, table_name)}")
-                    lines.append(f"```lean\n{table.lean_code}\n```\n")
-        
-        # Add API dependencies with their proofs
-        if api_deps:
-            lines.append("## API Dependencies")
-            for dep_api in api_deps:
-                service, api = project._find_api_with_service(dep_api)
-                if service and api:
-                    lines.append(f"### API {dep_api}")
-                    lines.append(f"#### Implementation")
-                    lines.append(f"Import Path: {project.get_lean_import_path('api', service, dep_api)}")
-                    lines.append(f"```lean\n{api.lean_code}\n```\n")
-                    if api.lean_test_code:
-                        lines.append(f"#### Theorems File")
-                        lines.append(f"Import Path: {project.get_test_lean_import_path('api', service, dep_api)}")
-                        lines.append(f"```lean\n{api.lean_test_code}\n```\n")
+        # Add related API with its proofs
+        service, api = project._find_api_with_service(api_name)
+        if service and api:
+            lines.append(f"## Related API: {api_name}")
+            lines.append(f"### Implementation")
+            lines.append(f"Import Path: {project.get_lean_import_path('api', service, api_name)}")
+            lines.append(f"```lean\n{api.lean_code}\n```\n")
+            if api.lean_test_code:
+                lines.append(f"### Theorems (You can use the theorems that have been proved)")
+                lines.append(f"Import Path: {project.get_test_lean_import_path('api', service, api_name)}")
+                lines.append(f"```lean\n{api.lean_test_code}\n```\n")
         
         return "\n".join(lines)
     
-    def _format_api_prompt(self,
-                          project: ProverProjectStructure,
-                          api_name: str,
-                          service_name: str,
-                          theorem_idx: int,
-                          api) -> str:
-        """Format the API section of the prompt"""
-        # put API implementation, test code, import prefix, and the current theorem to prove
-        theorem = api.lean_theorems[theorem_idx]
+    def _format_table_prompt(self,
+                           project: ProverProjectStructure,
+                           table_name: str,
+                           service_name: str,
+                           theorem_idx: int,
+                           table) -> str:
+        """Format the table section of the prompt"""
+        theorem = table.lean_theorems[theorem_idx]
         return f"""
-# API Implementation
-Import Path: {project.get_lean_import_path('api', service_name, api_name)}
+# Table Implementation
+Import Path: {project.get_lean_import_path('table', service_name, table_name)}
 ```lean
-{api.lean_code}
+{table.lean_code}
 ```
 
 # Theorems File
-Import Path: {project.get_test_lean_import_path('api', service_name, api_name)}
+Import Path: {project.get_test_lean_import_path('table', service_name, table_name)}
 ```lean
-{api.lean_test_code}
+{table.lean_test_code}
 ```
 
 # Import Prefix
 ```lean
-{api.lean_prefix}
+{table.lean_prefix}
 ```
 
 # Target Theorem
@@ -180,36 +156,33 @@ Import Path: {project.get_test_lean_import_path('api', service_name, api_name)}
     async def prove_theorem(self,
                           project: ProverProjectStructure,
                           service_name: str,
-                          api_name: str,
+                          table_name: str,
                           theorem_idx: int,
-                          table_deps: List[str],
-                          api_deps: List[str],
+                          api_name: str,
                           history: List[Dict[str, str]] = None,
                           logger: Logger = None) -> bool:
         """Prove a single theorem"""
-        service, api = project._find_api_with_service(api_name, service_name=service_name)
-        if not service or not api:
-            raise ValueError(f"API {api_name} not found")
+        service, table = project._find_table_with_service(table_name, service_name=service_name)
+        if not service or not table:
+            raise ValueError(f"Table {table_name} not found")
             
-        if theorem_idx >= len(api.lean_theorems):
+        if theorem_idx >= len(table.lean_theorems):
             raise ValueError(f"Theorem index {theorem_idx} out of range")
 
         # Prepare prompts
-        deps_prompt = self._format_dependencies_prompt(project, api_name, table_deps, api_deps)
-        api_prompt = self._format_api_prompt(project, api_name, service_name, theorem_idx, api)
+        deps_prompt = self._format_dependencies_prompt(project, table_name, service_name, api_name)
+        table_prompt = self._format_table_prompt(project, table_name, service_name, theorem_idx, table)
         
-
-        # NOTE: We use user message to pass system prompt now
         user_prompt = self.SYSTEM_PROMPT + f"""
 {deps_prompt}
 
-{api_prompt}
+{table_prompt}
 
 Use '### Output\n```json' to mark the JSON section.
 """
 
         history = history or []
-        old_prefix = api.lean_prefix
+        old_prefix = table.lean_prefix
 
         for attempt in range(self.max_retries):
             if attempt > 0:
@@ -228,13 +201,12 @@ Hints:
 Please make sure you have '### Output\n```json' in your response."""
 
             if logger:
-                logger.debug(f"Proving theorem {theorem_idx} for API {api_name} (attempt {attempt + 1}/{self.max_retries})")
-                logger.model_input(f"User prompt: {user_prompt}")
+                logger.debug(f"Proving theorem {theorem_idx} for table {table_name} (attempt {attempt + 1}/{self.max_retries})")
+                logger.model_input(user_prompt)
 
             # Call LLM
             response = await _call_openai_completion_async(
                 model=self.model,
-                # system_prompt=self.SYSTEM_PROMPT,
                 system_prompt="You are a Lean 4 language expert skilled in formal proof writing.",
                 user_prompt=user_prompt,
                 history=history,
@@ -242,7 +214,7 @@ Please make sure you have '### Output\n```json' in your response."""
             )
 
             if logger:
-                logger.model_output(f"Response: {response}")
+                logger.model_output(response)
 
             if not response:
                 if logger:
@@ -258,30 +230,30 @@ Please make sure you have '### Output\n```json' in your response."""
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to parse output: {e}")
-                    # input("Press Enter to continue...")
                 compilation_error = str(e)
+                input("Press Enter to continue...")
                 continue
 
             # Update project structure
-            project.set_test_lean_prefix("api", service_name, api_name, new_prefix)
-            project.set_theorem_proof("api", service_name, api_name, theorem_idx, proof)
-            full_code = project.concat_test_lean_code("api", service_name, api_name)
-            # update file
-            project.set_test_lean("api", service_name, api_name, full_code)
+            project.set_test_lean_prefix("table", service_name, table_name, new_prefix)
+            project.set_theorem_proof("table", service_name, table_name, theorem_idx, proof)
+            full_code = project.concat_test_lean_code("table", service_name, table_name)
+            project.set_test_lean("table", service_name, table_name, full_code)
 
             # Try to build
-            # input("Press Enter to continue...")
-            success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=False)
+            input("Press Enter to continue...")
+
+            success, compilation_error = project.build(parse=True, only_errors=True, add_context=True)
             if success:
                 if logger:
-                    logger.debug(f"Successfully proved theorem {theorem_idx} for API: {api_name}")
+                    logger.debug(f"Successfully proved theorem {theorem_idx} for table {table_name}")
                 return True
 
             # Restore old state
-            project.del_theorem_proof("api", service_name, api_name, theorem_idx)
-            project.set_test_lean_prefix("api", service_name, api_name, old_prefix)
-            full_code = project.concat_test_lean_code("api", service_name, api_name)
-            project.set_test_lean("api", service_name, api_name, full_code)
+            project.del_theorem_proof("table", service_name, table_name, theorem_idx)
+            project.set_test_lean_prefix("table", service_name, table_name, old_prefix)
+            full_code = project.concat_test_lean_code("table", service_name, table_name)
+            project.set_test_lean("table", service_name, table_name, full_code)
 
             # Update history
             history.extend([
@@ -290,63 +262,59 @@ Please make sure you have '### Output\n```json' in your response."""
             ])
 
         if logger:
-            logger.error(f"Failed to prove theorem {theorem_idx} for API {api_name} after {self.max_retries} attempts")
+            logger.error(f"Failed to prove theorem {theorem_idx} for table {table_name} after {self.max_retries} attempts")
         
         return False
 
     async def run(self,
                  prover_info: APIProverInfo,
                  output_path: Path,
-                 max_theorem_retries: int = 4,  # New parameter for outer retry loop
+                 max_theorem_retries: int = 4,
                  logger: Logger = None) -> APIProverInfo:
-        """Prove theorems for all APIs in topological order
-        
-        Args:
-            prover_info: Info containing project and dependencies
-            output_path: Path to save results
-            max_theorem_retries: Maximum number of fresh attempts for each theorem
-            logger: Optional logger
-        """
-        if not prover_info.api_topological_order:
-            raise ValueError("No valid API topological order available")
+        """Prove theorems for all tables in topological order"""
+        if not prover_info.topological_order:
+            raise ValueError("No valid table topological order available")
 
-        for service_name, api_name in prover_info.api_topological_order:
-            service, api = prover_info.project._find_api_with_service(api_name, service_name)
-            if not service or not api:
+        for table_name in prover_info.topological_order:                
+            service, table = prover_info.project._find_table_with_service(table_name)
+            service_name = service.name
+            if not service or not table:
                 continue
                 
-            for idx, theorem in enumerate(api.lean_theorems):
-                if api.proved_theorems[idx]:  # Skip already proved theorems
+            for idx, theorem in enumerate(table.lean_theorems):
+                if table.proved_theorems[idx]:  # Skip already proved theorems
                     continue
+                
+                # Get the related API for this theorem
+                api_name = prover_info.table_theorem_dependencies[service_name][table_name][idx]
                 
                 # Outer retry loop for fresh attempts
                 for attempt in range(max_theorem_retries):
                     if logger:
                         logger.info(f"Starting fresh attempt {attempt + 1}/{max_theorem_retries} "
-                                  f"for theorem {idx} of API {api_name}")
+                                  f"for theorem {idx} of table {table_name}")
                     
                     success = await self.prove_theorem(
                         project=prover_info.project,
                         service_name=service_name,
-                        api_name=api_name,
+                        table_name=table_name,
                         theorem_idx=idx,
-                        table_deps=prover_info.api_table_dependencies.get(api_name, []),
-                        api_deps=prover_info.api_dependencies.get(api_name, []),
+                        api_name=api_name,
                         logger=logger
                     )
                     
                     if success:
                         if logger:
-                            logger.info(f"Successfully proved theorem {idx} of API {api_name} "
+                            logger.info(f"Successfully proved theorem {idx} of table {table_name} "
                                       f"on attempt {attempt + 1}")
                         break
                     
                     if logger and attempt < max_theorem_retries - 1:
-                        logger.warning(f"Failed to prove theorem {idx} of API {api_name} "
+                        logger.warning(f"Failed to prove theorem {idx} of table {table_name} "
                                      f"on attempt {attempt + 1}, starting fresh attempt")
                 
                 if not success and logger:
-                    logger.error(f"Failed to prove theorem {idx} of API {api_name} "
+                    logger.error(f"Failed to prove theorem {idx} of table {table_name} "
                                f"after {max_theorem_retries} fresh attempts")
                 
                 # Save progress after each theorem attempt

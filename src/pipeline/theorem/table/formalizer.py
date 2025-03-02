@@ -33,9 +33,11 @@ Output Format:
 {
     "import_prefix": "<complete import section with all necessary imports and opens>",
     "theorems": [
-        "<theorem 1 complete code including comments>",
-        "<theorem 2 complete code including comments>",
-        ...
+        {
+            "theorem": "<complete theorem code including comments>",
+            "service_name": "<service name>",
+            "api_name": "<api name>"
+        }
     ]
 }
 ```
@@ -56,6 +58,11 @@ Requirements:
    - Don't repeat existing theorems! If you find out the theorem to be written is already in the existing theorems, just skip it, you are allowed to return a empty list if necessary
    It means the property is the same as some properties already formalized
    - Each item in the returned list should be a complete theorem code and also contains only one theorem
+
+3. API Dependencies:
+   - For each theorem, specify exactly one API it relates to
+   - The API must be from the property's APIs
+   - Provide both service name and API name
 """
 
     def __init__(self, model: str = "qwen-max", max_retries: int = 5):
@@ -71,19 +78,21 @@ Requirements:
         
         # Add current table
         table = info.project._find_table(table_name)
-        sections.append(f"Current Table Definition:")
+        sections.append(f"## Current Table Definition")
         sections.append(f"Import path: {info.project.get_lean_import_path('table', service_name, table_name)}")
         sections.append("```lean")
         sections.append(table.lean_code)
         sections.append("```\n")
         
         # Add related APIs
-        sections.append("Related APIs:")
+        sections.append("## Related APIs\n(Service name.API name)")
         for service_name, apis in property_apis.items():
             for api_name in apis:
                 api = info.project._find_api(service_name, api_name)
                 if api:
-                    sections.append(f"\n{service_name}.{api_name}:")
+                    sections.append(f"### \n{service_name}.{api_name}:")
+                    sections.append(f"Service: {service_name}")
+                    sections.append(f"API: {api_name}")
                     sections.append(f"Implementation Import Path: {info.project.get_lean_import_path('api', service_name, api_name)}")
                     sections.append("Implementation:")
                     sections.append("```lean")
@@ -178,10 +187,41 @@ Dependencies:
 
 Please ensure all import statements use the exact paths provided above.
 
+Remember you should only write theorems related to the APIs in the Dependencies section, and mark one of them as the apis that theorem is related to.
+
 Make sure you have "### Output\n```json" in your response so that I can parse the output correctly
 """
 
         for attempt in range(self.max_retries):
+            if attempt > 0:
+                current_prompt = f"""
+Compilation failed with error:
+{error_message}
+
+Please fix the Lean code. Make sure to:
+1. Address the specific compilation error
+2. Maintain the same theorem logic
+3. Use correct import paths
+4. Follow Lean 4 syntax
+
+You have no right to change the code in the other files, so you must fix the error by yourself, in this single file
+
+Please provide your response in the same format:
+1. Analysis of the error and your fixes
+2. ### Output
+```json
+{{
+    "import_prefix": "<complete import section with all necessary imports and opens>",
+    "theorems": [
+        {{
+            "theorem": "<complete theorem code including comments>",
+            "service_name": "<service name>",
+            "api_name": "<api name>"
+        }}
+    ]
+}}
+```
+"""
             if logger:
                 logger.info(f"Attempt {attempt + 1}/{self.max_retries}")
                 logger.model_input(current_prompt)
@@ -207,78 +247,78 @@ Make sure you have "### Output\n```json" in your response so that I can parse th
                 output_section = response.split("### Output\n```json")[1].split("```")[0]
                 output_data = json.loads(output_section)
                 prefix = output_data["import_prefix"]
-                theorems = output_data["theorems"]
+                theorems_data = output_data["theorems"]
 
-                # Check if the new property is already in the old theorems
-                if theorems == []:
+                # Check if empty (already formalized)
+                if not theorems_data:
                     if logger:
                         logger.warning(f"Property '{property_info.property}' for table '{table_name}' is already formalized")
                     return True
+
+                # Validate and extract theorems
+                theorems = []
+                api_deps = []
+                fail = False
+                for idx, theorem_data in enumerate(theorems_data):
+                    service_name = theorem_data["service_name"]
+                    api_name = theorem_data["api_name"]
+                    
+                    # Validate API is in property APIs
+                    if (service_name not in property_info.apis or 
+                        api_name not in property_info.apis[service_name]):
+                        if logger:
+                            logger.error(f"Invalid API dependency in theorem {idx}: {service_name}.{api_name}")
+                        error_message = f"Invalid API dependency in theorem {idx}: {service_name}.{api_name}"
+                        fail = True
+                        break
+                    
+                    theorems.append(theorem_data["theorem"])
+                    api_deps.append((service_name, api_name))
+
+                if fail:
+                    continue
+
+                # Combine code
+                current_theorems =  info.get_table_theorems(table_name) or []
+                full_code = prefix + "\n\n" + "\n\n".join(current_theorems) + "\n\n" + "\n\n".join(theorems)
+                
+                # Try to compile
+                success, error_message = await self._try_compile(
+                    service_name=service_name,
+                    table_name=table_name,
+                    code=full_code,
+                    info=info,
+                    logger=logger
+                )
+
+                if logger:
+                    logger.info(f"Compilation result: success={success}, error_message={error_message}")
+                
+                if success:
+                    # Update prefix and add theorems
+                    info.project.set_test_lean_prefix("table", service_name, table_name, prefix)
+                    for idx, theorem in enumerate(theorems):
+                        if theorem.strip():
+                            service_name, api_name = api_deps[idx]
+                            info.add_theorem_dependency(service_name, table_name,
+                                                        api_name)
+                            info.project.add_test_lean_theorem("table", service_name, table_name, theorem.strip())
+                            
+                    return True
+                
+                # Update history
+                history.extend([
+                    {"role": "user", "content": current_prompt},
+                    {"role": "assistant", "content": response}
+                ])
+                
+                if logger:
+                    logger.warning(f"Compilation failed (attempt {attempt + 1}): {error_message}")
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to parse model response: {e}")
                 continue
             
-            # Combine code
-            current_theorems =  info.get_table_theorems(table_name) or []
-            full_code = prefix + "\n\n" + "\n\n".join(current_theorems) + "\n\n" + "\n\n".join(theorems)
-            
-            # Try to compile
-            success, error_message = await self._try_compile(
-                service_name=service_name,
-                table_name=table_name,
-                code=full_code,
-                info=info,
-                logger=logger
-            )
-
-            if logger:
-                logger.info(f"Compilation result: success={success}, error_message={error_message}")
-            
-            if success:
-                # Update prefix and add theorems
-                info.project.set_test_lean_prefix("table", service_name, table_name, prefix)
-                for theorem in theorems:
-                    if theorem.strip():
-                        info.project.add_test_lean_theorem("table", service_name, table_name, theorem.strip())
-                return True
-            
-            # Update history
-            history.extend([
-                {"role": "user", "content": current_prompt},
-                {"role": "assistant", "content": response}
-            ])
-            
-            current_prompt = f"""
-Compilation failed with error:
-{error_message}
-
-Please fix the Lean code. Make sure to:
-1. Address the specific compilation error
-2. Maintain the same theorem logic
-3. Use correct import paths
-4. Follow Lean 4 syntax
-
-You have no right to change the code in the other files, so you must fix the error by yourself, in this single file
-
-Please provide your response in the same format:
-1. Analysis of the error and your fixes
-2. ### Output
-```json
-{{
-    "import_prefix": "<corrected imports and opens>",
-    "theorems": [
-        "<corrected theorem 1>",
-        "<corrected theorem 2>",
-        ...
-    ]
-}}
-```
-"""
-            
-            if logger:
-                logger.warning(f"Compilation failed (attempt {attempt + 1}): {error_message}")
-        
         if logger:
             logger.error(f"Failed to formalize property after {self.max_retries} attempts")
         

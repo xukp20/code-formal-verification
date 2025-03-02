@@ -12,6 +12,7 @@ import datetime
 from src.pipeline.prove.api.prover import APIProver
 from src.pipeline.prove.api.types import APIProverInfo
 from src.pipeline.theorem.table.theorem_types import TableTheoremGenerationInfo
+from src.pipeline.prove.table.prover import TableTheoremProver
 
 # Define custom log levels
 MODEL_INPUT = 15  # Between DEBUG and INFO
@@ -35,12 +36,34 @@ Logger.model_output = model_output
 class PipelineState(Enum):
     """Pipeline execution states"""
     API_PROOFS = 0
-    COMPLETED = 1
+    TABLE_PROOFS = 1
+    COMPLETED = 2
 
     def __le__(self, other):
         if not isinstance(other, PipelineState):
             return NotImplemented
         return self.value <= other.value
+    
+    def __ge__(self, other):
+        if not isinstance(other, PipelineState):
+            return NotImplemented
+        return self.value >= other.value
+    
+    def __gt__(self, other):
+        if not isinstance(other, PipelineState):
+            return NotImplemented
+        return self.value > other.value
+    
+    def __lt__(self, other):
+        if not isinstance(other, PipelineState):
+            return NotImplemented
+        return self.value < other.value
+
+    def __eq__(self, other):
+        if not isinstance(other, PipelineState):
+            return NotImplemented
+        return self.value == other.value
+    
 
 class TheoremProvingPipeline:
     """Complete theorem proving pipeline for a project"""
@@ -54,7 +77,10 @@ class TheoremProvingPipeline:
                  log_model_io: bool = False,
                  continue_from: str = None,
                  start_state: str = None,
-                 api_prover_max_retries: int = 5):
+                 api_prover_max_retries: int = 5,
+                 api_prover_max_theorem_retries: int = 4,
+                 table_prover_max_retries: int = 5,
+                 table_prover_max_theorem_retries: int = 4):
         self.project_name = project_name
         self.project_base_path = project_base_path
         self.output_base_path = Path(output_base_path)
@@ -63,6 +89,9 @@ class TheoremProvingPipeline:
         self.continue_from = continue_from
         self.start_state = PipelineState[start_state] if start_state else None
         self.api_prover_max_retries = api_prover_max_retries
+        self.api_prover_max_theorem_retries = api_prover_max_theorem_retries
+        self.table_prover_max_retries = table_prover_max_retries
+        self.table_prover_max_theorem_retries = table_prover_max_theorem_retries
 
         # Create output directory
         self.output_path.mkdir(parents=True, exist_ok=True)
@@ -145,11 +174,34 @@ class TheoremProvingPipeline:
         result = await prover.run(
             prover_info=prover_info,
             output_path=self.output_path,
-            logger=self.logger
+            logger=self.logger,
+            max_theorem_retries=self.api_prover_max_theorem_retries
         )
         
         self._save_state(PipelineState.API_PROOFS)
         self.logger.info("API theorem proving completed")
+        return result
+
+    async def _run_table_proofs(self, prover_info: APIProverInfo) -> APIProverInfo:
+        """Run table theorem proving step"""
+        self.logger.info("Starting table theorem proving")
+        
+        # Create prover
+        prover = TableTheoremProver(
+            model=self.model,
+            max_retries=self.table_prover_max_retries
+        )
+        
+        # Run proving
+        result = await prover.run(
+            prover_info=prover_info,
+            output_path=self.output_path,
+            logger=self.logger,
+            max_theorem_retries=self.table_prover_max_theorem_retries
+        )
+        
+        self._save_state(PipelineState.TABLE_PROOFS)
+        self.logger.info("Table theorem proving completed")
         return result
 
     async def run(self):
@@ -172,6 +224,13 @@ class TheoremProvingPipeline:
         # Run API theorem proving
         if start_state <= PipelineState.API_PROOFS:
             prover_info = await self._run_api_proofs(theorem_info)
+        else:
+            # Load previous API proving results
+            prover_info = APIProverInfo.load(self.output_path / "api_proofs.json")
+        
+        # Run table theorem proving
+        if start_state <= PipelineState.TABLE_PROOFS:
+            prover_info = await self._run_table_proofs(prover_info)
         
         self._save_state(PipelineState.COMPLETED)
         self.logger.info("Theorem proving pipeline completed successfully")
@@ -192,14 +251,20 @@ def main():
     parser.add_argument("--log-level", default="INFO",
                       choices=["DEBUG", "MODEL_INPUT", "MODEL_OUTPUT", "INFO", "WARNING", "ERROR", "CRITICAL"],
                       help="Set the logging level")
-    parser.add_argument("--api-prover-max-retries", type=int, default=10,
+    parser.add_argument("--api-prover-max-retries", type=int, default=5,
                       help="Maximum number of retries for API theorem proving")
+    parser.add_argument("--api-prover-max-theorem-retries", type=int, default=2,
+                        help="Maximum number of retries for individual theorems in API theorem proving")
     parser.add_argument("--log-model-io", action="store_true",
                       help="Enable logging of model inputs and outputs")
     parser.add_argument("--continue", dest="continue_from", action="store_true",
                       help="Continue from last saved state")
     parser.add_argument("--start-state", choices=[s.name for s in PipelineState],
                       help="Start from specific state (requires --continue)")
+    parser.add_argument("--table-prover-max-retries", type=int, default=5,
+                      help="Maximum number of retries for table theorem proving")
+    parser.add_argument("--table-prover-max-theorem-retries", type=int, default=2,
+                        help="Maximum number of retries for individual theorems in table theorem proving")
     
     args = parser.parse_args()
 
@@ -215,7 +280,10 @@ def main():
         log_model_io=args.log_model_io,
         continue_from=args.continue_from,
         start_state=args.start_state,
-        api_prover_max_retries=args.api_prover_max_retries
+        api_prover_max_retries=args.api_prover_max_retries,
+        api_prover_max_theorem_retries=args.api_prover_max_theorem_retries,
+        table_prover_max_retries=args.table_prover_max_retries,
+        table_prover_max_theorem_retries=args.table_prover_max_theorem_retries
     )
     
     success = asyncio.run(pipeline.run())
