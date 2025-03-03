@@ -36,6 +36,8 @@ log_level="DEBUG"
 # task="theorem_generation"
 task="prove"
 
+prove_max_retries=5
+
 if [ "$task" == "formalization" ]; then
     command="python src/pipeline/formalization_pipeline.py \
 --project-name $project_name \
@@ -67,11 +69,11 @@ elif [ "$task" == "prove" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---api-prover-max-retries 4 \
---table-prover-max-retries 4 \
---model $model \
---continue \
---start-state TABLE_PROOFS"
+--api-prover-max-retries $prove_max_retries \
+--table-prover-max-retries $prove_max_retries \
+--model $model"
+# --continue \
+# --start-state TABLE_PROOFS"
 
 else
     echo "Invalid task: $task"

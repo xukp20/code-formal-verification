@@ -257,7 +257,7 @@ def main():
                       help="Set the logging level")
     parser.add_argument("--api-prover-max-retries", type=int, default=5,
                       help="Maximum number of retries for API theorem proving")
-    parser.add_argument("--api-prover-max-theorem-retries", type=int, default=2,
+    parser.add_argument("--api-prover-max-theorem-retries", type=int, default=3,
                         help="Maximum number of retries for individual theorems in API theorem proving")
     parser.add_argument("--log-model-io", action="store_true",
                       help="Enable logging of model inputs and outputs")

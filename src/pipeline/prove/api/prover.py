@@ -6,6 +6,11 @@ from logging import Logger
 from src.utils.apis.langchain_client import _call_openai_completion_async
 from src.utils.parse_project.parser import ProjectStructure
 from src.pipeline.prove.api.types import APIProverInfo, ProverProjectStructure
+from src.utils.lean.build_parser import (
+    parse_build_output_to_messages, 
+    parse_lean_message_details,
+    all_errors_are_unsolved_goals
+)
 
 class APIProver:
     """Prove theorems for formalized APIs"""
@@ -19,6 +24,11 @@ We have completed several formalization steps:
 2. APIs are formalized as Lean 4 functions with precise input/output types
 3. Each API has a set of theorems describing its required properties
 4. Dependencies are ordered topologically, and theorems for dependent APIs are already proved
+
+When your proof has compilation errors, I will help you by:
+1. Finding the longest valid part of your proof
+2. Showing you the unsolved goals at that point
+3. This helps you understand exactly where the proof went wrong
 
 Your task is to prove a specific theorem about an API's behavior.
 
@@ -178,6 +188,125 @@ Import Path: {project.get_test_lean_import_path('api', service_name, api_name)}
 ```
 """
 
+    async def _try_backward_compile(self,
+                                  project: ProverProjectStructure,
+                                  service_name: str,
+                                  api_name: str,
+                                  theorem_idx: int,
+                                  proof: str,
+                                  logger: Optional[Logger] = None) -> Tuple[Optional[str], Optional[str]]:
+        """Try to find the longest valid proof by backtracking
+        
+        Args:
+            project: Project structure
+            service_name: Service name
+            api_name: API name
+            theorem_idx: Index of current theorem
+            proof: Current theorem's proof
+            logger: Optional logger
+        
+        Returns:
+            Tuple of (error_message, partial_theorem)
+            - If proof is complete: (None, complete_theorem)
+            - If has unsolved goals: (first_unsolved_goals, partial_theorem)
+            - If all attempts fail: (None, None)
+        """
+        # Backup original proof
+        original_proof = proof
+        
+        # Split proof into lines
+        lines = proof.splitlines()
+        
+        for i in range(len(lines)-1, -1, -1):
+            # Try proof up to this line
+            partial_proof = "\n".join(lines[:i+1])
+            
+            # Set the partial proof and get full code
+            project.set_theorem_proof("api", service_name, api_name, theorem_idx, partial_proof)
+            full_code = project.concat_test_lean_code("api", service_name, api_name)
+            project.set_test_lean("api", service_name, api_name, full_code)
+            
+            # Try to build
+            # input("Press Enter to continue...")
+            success, output = project._run_lake_build()
+            if success:  # Build succeeded
+                # Keep removing lines from the proof until the build fails
+                for j in range(i, -1, -1):
+                    partial_proof = "\n".join(lines[:j])
+                    project.set_theorem_proof("api", service_name, api_name, theorem_idx, partial_proof)
+                    full_code = project.concat_test_lean_code("api", service_name, api_name)
+                    project.set_test_lean("api", service_name, api_name, full_code)
+                    success, output = project._run_lake_build()
+                    if not success:
+                        partial_proof = "\n".join(lines[:j+1])
+                        break
+
+                # Restore original proof before returning
+                project.set_theorem_proof("api", service_name, api_name, theorem_idx, original_proof)
+                full_code = project.concat_test_lean_code("api", service_name, api_name)
+                project.set_test_lean("api", service_name, api_name, full_code)
+                return None, partial_proof
+                
+            # Parse errors
+            messages = parse_build_output_to_messages(output)
+            if not messages:
+                continue
+                
+            # Check if all errors are unsolved goals
+            if all_errors_are_unsolved_goals(messages):
+                # Get first unsolved goals error
+                details = parse_lean_message_details(messages, only_errors=True)
+                if details:
+                    unsolved_goals = details[0]["content"]
+                    # Restore original proof before returning
+                    project.set_theorem_proof("api", service_name, api_name, theorem_idx, original_proof)
+                    full_code = project.concat_test_lean_code("api", service_name, api_name)
+                    project.set_test_lean("api", service_name, api_name, full_code)
+                    # print(f"Unsolved goals: {unsolved_goals}")
+                    # print(f"Partial proof: {partial_proof}")
+                    # input("Press Enter to continue...")
+                    return unsolved_goals, partial_proof
+        
+        # Restore original proof if no valid partial proof found
+        project.set_theorem_proof("api", service_name, api_name, theorem_idx, original_proof)
+        full_code = project.concat_test_lean_code("api", service_name, api_name)
+        project.set_test_lean("api", service_name, api_name, full_code)
+        return None, None
+
+    def _format_retry_prompt(self,
+                           compilation_error: str,
+                           partial_proof: Optional[str] = None,
+                           unsolved_goals: Optional[str] = None) -> str:
+        """Format the retry prompt with backtracking information"""
+        prompt = f"""Compilation failed. Error:
+{compilation_error}
+
+"""
+        if partial_proof and unsolved_goals:
+            prompt += f"""Valid part of the proof:
+```lean
+{partial_proof}
+```
+
+Current unsolved goals:
+{unsolved_goals}
+
+"""
+        
+        prompt += """Please fix the proof.
+
+Hints:
+1. If you see "no goals to be solved", the proof may be complete at that point
+2. If you see "unknown tactic", check tactic name and required imports
+3. If you see "type mismatch", verify argument types carefully
+4. If the proving strategy seems wrong, consider alternative approaches
+5. Use the unsolved goals to understand exactly what needs to be proved
+6. Keep the working parts of the proof and fix the specific step that failed
+
+Please make sure you have '### Output\n```json' in your response."""
+        
+        return prompt
+
     async def prove_theorem(self,
                           project: ProverProjectStructure,
                           service_name: str,
@@ -212,22 +341,14 @@ Use '### Output\n```json' to mark the JSON section.
         history = history or []
         old_prefix = api.lean_prefix
 
+        unsolved_goals = None
+        partial_proof = None
+        compilation_error = None
+
         for attempt in range(self.max_retries):
             if attempt > 0:
-                user_prompt = f"""Compilation failed. Error:
-{compilation_error}
-
-Please fix the proof.
-
-Hints:
-1. If you see "no goals to be solved", consider removing all the content after the error part (including the line of the error), because the proof is already complete in the last step.
-2. If you see "unknown tactic", consider removing the tactic or add necessary imports. Consider if the tactic is actually named correctly.
-3. If you see "type mismatch", consider the type of the argument you are passing to the tactic.
-4. If you think the proving strategy is wrong, please reconsider it and try other strategies if possible.
-5. Never repeat the mistake you made in the last step.
-
-Please make sure you have '### Output\n```json' in your response."""
-
+                user_prompt = self._format_retry_prompt(compilation_error, partial_proof, unsolved_goals)
+            
             if logger:
                 logger.debug(f"Proving theorem {theorem_idx} for API {api_name} (attempt {attempt + 1}/{self.max_retries})")
                 logger.model_input(f"User prompt: {user_prompt}")
@@ -272,21 +393,43 @@ Please make sure you have '### Output\n```json' in your response."""
 
             # Try to build
             # input("Press Enter to continue...")
-            # success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=False)
             success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=True)
             
-            if success:
-                if logger:
-                    logger.debug(f"Successfully proved theorem {theorem_idx} for API: {api_name}")
+            if not success:
+                # Try backtracking to find valid partial proof
+                unsolved_goals, partial_proof = await self._try_backward_compile(
+                    project=project,
+                    service_name=service_name,
+                    api_name=api_name,
+                    theorem_idx=theorem_idx,
+                    proof=proof,  # Pass just the current theorem's proof
+                    logger=logger
+                )
+                
+                if unsolved_goals is None and partial_proof:
+                    # Found complete proof through backtracking
+                    project.set_theorem_proof("api", service_name, api_name, theorem_idx, partial_proof)
+                    full_code = project.concat_test_lean_code("api", service_name, api_name)
+                    project.set_test_lean("api", service_name, api_name, full_code)
+                    success, _ = project.build(parse=True, only_errors=True, add_context=True, only_first=True)
+                    if success:
+                        return True
+                    else:
+                        if logger:
+                            logger.error(f"Partial proof is not complete from backtracking")
+                        project.set_theorem_proof("api", service_name, api_name, theorem_idx, proof)
+                        full_code = project.concat_test_lean_code("api", service_name, api_name)
+                        project.set_test_lean("api", service_name, api_name, full_code)
+            else:
                 return True
 
-            # Restore old state
+            # Restore old state if not successful
             project.del_theorem_proof("api", service_name, api_name, theorem_idx)
             project.set_test_lean_prefix("api", service_name, api_name, old_prefix)
             full_code = project.concat_test_lean_code("api", service_name, api_name)
             project.set_test_lean("api", service_name, api_name, full_code)
 
-            # Update history
+            # Update history with this attempt
             history.extend([
                 {"role": "user", "content": user_prompt},
                 {"role": "assistant", "content": response}

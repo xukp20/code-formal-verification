@@ -1,6 +1,17 @@
 from typing import List, Dict, Optional
 import re
 
+def is_unsolved_goals_error(error_msg: str) -> bool:
+    """Check if an error message is about unsolved goals
+    
+    Args:
+        error_msg: Error message to check
+    
+    Returns:
+        True if message is about unsolved goals
+    """
+    return "unsolved goals" in error_msg
+
 def parse_build_output_to_messages(output: str) -> List[Dict[str, str]]:
     """Parse Lake build output into a list of warnings and errors
     
@@ -114,6 +125,20 @@ def parse_lean_message_details(messages: List[Dict[str, str]],
             })
     
     return details
+
+def all_errors_are_unsolved_goals(messages: List[Dict[str, str]]) -> bool:
+    """Check if all error messages are about unsolved goals
+    
+    Args:
+        messages: List of message dicts from parse_build_output_to_messages
+    
+    Returns:
+        True if all errors are about unsolved goals
+    """
+    error_messages = [msg for msg in messages if msg["type"] == "error"]
+    if not error_messages:
+        return False
+    return all(is_unsolved_goals_error(msg["content"]) for msg in error_messages)
 
 # Test case
 if __name__ == "__main__":
