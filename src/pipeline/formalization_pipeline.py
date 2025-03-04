@@ -10,13 +10,13 @@ from typing import Optional
 import datetime
 
 from src.utils.parse_project.parser import ProjectStructure, LoadSettings
-from src.pipeline.table.types import TableDependencyInfo, TableFormalizationInfo
-from src.pipeline.table.analyzer import TableDependencyAnalyzer
-from src.pipeline.table.formalizer import TableFormalizer
-from src.pipeline.api.types import APIDependencyInfo, APIFormalizationInfo
-from src.pipeline.api.table_analyzer import APITableDependencyAnalyzer
-from src.pipeline.api.api_analyzer import APIAnalyzer
-from src.pipeline.api.formalizer import APIFormalizer
+from src.pipeline.formalize.table.types import TableDependencyInfo, TableFormalizationInfo
+from src.pipeline.formalize.table.analyzer import TableDependencyAnalyzer
+from src.pipeline.formalize.table.formalizer import TableFormalizer
+from src.pipeline.formalize.api.types import APIDependencyInfo, APIFormalizationInfo
+from src.pipeline.formalize.api.table_analyzer import APITableDependencyAnalyzer
+from src.pipeline.formalize.api.api_analyzer import APIAnalyzer
+from src.pipeline.formalize.api.formalizer import APIFormalizer
 
 # Define custom log levels
 MODEL_INPUT = 15  # Between DEBUG and INFO

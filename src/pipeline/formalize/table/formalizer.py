@@ -4,7 +4,7 @@ import yaml
 from pathlib import Path
 from src.utils.parse_project.parser import ProjectStructure
 from src.utils.apis.langchain_client import _call_openai_completion_async
-from src.pipeline.table.types import TableDependencyInfo, TableFormalizationInfo
+from src.pipeline.formalize.table.types import TableDependencyInfo, TableFormalizationInfo
 from logging import Logger
 
 

@@ -2,8 +2,8 @@ import asyncio
 import os
 from pathlib import Path
 from src.utils.parse_project.parser import ProjectStructure
-from src.pipeline.table.types import TableFormalizationInfo
-from src.pipeline.api.table_analyzer import APITableDependencyAnalyzer
+from src.pipeline.formalize.table.types import TableFormalizationInfo
+from src.pipeline.formalize.api.table_analyzer import APITableDependencyAnalyzer
 from logging import Logger, INFO, StreamHandler, Formatter
 
 async def test_api_table_analyzer():

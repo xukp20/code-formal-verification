@@ -2,7 +2,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import json
 from src.utils.parse_project.parser import ProjectStructure
 from src.utils.apis.langchain_client import _call_openai_completion_async
-from src.pipeline.api.types import APIDependencyInfo
+from src.pipeline.formalize.api.types import APIDependencyInfo
 from collections import defaultdict, deque
 from logging import Logger
 
@@ -75,23 +75,38 @@ Example output format:
                                     dependencies: Dict[str, List[str]]) -> Optional[List[Tuple[str, str]]]:
         """Compute topological sort of APIs"""
         # Build adjacency list and in-degree count
+        print("*** _compute_api_topological_sort ***")
+        print(dependencies)
+        print("*** _compute_api_topological_sort ***")
         graph = defaultdict(list)
         in_degree = defaultdict(int)
-        
+                
         for api, deps in dependencies.items():
+            print(f"api: {api}, deps: {deps}")
             for dep in deps:
-                graph[dep].append(api)
+                # Extract the actual API name from the dependency (remove service prefix)
+                dep_api = dep.split('.')[-1]
+                print(f"dep: {dep} -> {dep_api}")
+                graph[dep_api].append(api)
                 in_degree[api] += 1
             if api not in in_degree:
+                print(f"api not in in_degree: {api}")
                 in_degree[api] = 0
         
         # Perform topological sort
         queue = deque([api for api, degree in in_degree.items() if degree == 0])
         result = []
+        visited = set()
         
         while queue:
             api = queue.popleft()
+            if api in visited:
+                continue
+            visited.add(api)
+            
+            print(f"api into find_api_with_service: {api}")
             service, api_obj = self.project._find_api_with_service(api)
+            print(f"service: {service.name}, api_obj: {api_obj.name}")
             result.append((service.name, api))
             
             for dependent in graph[api]:
@@ -99,8 +114,14 @@ Example output format:
                 if in_degree[dependent] == 0:
                     queue.append(dependent)
         
+        print("*** _compute_api_topological_sort ***")
+        print(f"result: {result}")
+        print(f"dependencies: {dependencies}")
+        print(f"visited: {visited}")
+        
         # Check if valid (no cycles)
         if len(result) != len(dependencies):
+            print(f"Invalid topological sort: {len(result)} != {len(dependencies)}")
             return None
             
         return result

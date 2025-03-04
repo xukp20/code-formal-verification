@@ -12,7 +12,7 @@ import datetime
 from src.utils.parse_project.parser import ProjectStructure
 from src.pipeline.theorem.api.generator import APIRequirementGenerator
 from src.pipeline.theorem.api.types import APIRequirementGenerationInfo
-from src.pipeline.api.types import APIFormalizationInfo
+from src.pipeline.formalize.api.types import APIFormalizationInfo
 from src.pipeline.theorem.table.analyzer import TablePropertiesAnalyzer
 from src.pipeline.theorem.table.types import TablePropertiesInfo
 from src.pipeline.theorem.api.theorem_types import APITheoremGenerationInfo

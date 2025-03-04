@@ -1,8 +1,8 @@
 import asyncio
 import os
 from src.utils.parse_project.parser import ProjectStructure
-from src.pipeline.table.formalizer import TableFormalizer
-from src.pipeline.table.types import TableDependencyInfo
+from src.pipeline.formalize.table.formalizer import TableFormalizer
+from src.pipeline.formalize.table.types import TableDependencyInfo
 from logging import Logger, INFO, StreamHandler, Formatter
 from pathlib import Path
 

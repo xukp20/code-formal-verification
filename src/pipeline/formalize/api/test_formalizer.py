@@ -2,8 +2,8 @@ import asyncio
 import os
 from pathlib import Path
 from src.utils.parse_project.parser import ProjectStructure
-from src.pipeline.api.types import APIFormalizationInfo
-from src.pipeline.api.formalizer import APIFormalizer
+from src.pipeline.formalize.api.types import APIFormalizationInfo
+from src.pipeline.formalize.api.formalizer import APIFormalizer
 from logging import Logger, INFO, StreamHandler, Formatter
 
 async def test_api_formalizer():

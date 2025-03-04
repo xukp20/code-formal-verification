@@ -6,7 +6,7 @@ from logging import Logger
 
 from src.utils.parse_project.parser import ProjectStructure
 from src.utils.apis.langchain_client import _call_openai_completion_async
-from src.pipeline.api.types import APIFormalizationInfo
+from src.pipeline.formalize.api.types import APIFormalizationInfo
 from src.pipeline.theorem.api.types import (
     APIDocInfo, APIRequirementInfo, APIRequirementGenerationInfo
 )

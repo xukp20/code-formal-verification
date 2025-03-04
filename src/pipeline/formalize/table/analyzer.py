@@ -4,7 +4,7 @@ import yaml
 from collections import defaultdict, deque
 from src.utils.parse_project.parser import ProjectStructure, ServiceInfo
 from src.utils.apis.langchain_client import _call_openai_completion_async
-from src.pipeline.table.types import TableDependencyInfo
+from src.pipeline.formalize.table.types import TableDependencyInfo
 from logging import Logger
 
 class TableDependencyAnalyzer:

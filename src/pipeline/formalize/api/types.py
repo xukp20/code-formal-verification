@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
-from src.pipeline.table.types import TableFormalizationInfo
+from src.pipeline.formalize.table.types import TableFormalizationInfo
 
 @dataclass
 class APIDependencyInfo(TableFormalizationInfo):

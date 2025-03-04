@@ -3,10 +3,10 @@ import json
 import yaml
 from src.utils.parse_project.parser import ProjectStructure, ServiceInfo
 from src.utils.apis.langchain_client import _call_openai_completion_async
-from src.pipeline.api.types import APIDependencyInfo
-from src.pipeline.api.constants import DB_API_DECLARATIONS
+from src.pipeline.formalize.api.types import APIDependencyInfo
+from src.pipeline.formalize.api.constants import DB_API_DECLARATIONS
 from logging import Logger
-from src.pipeline.table.types import TableFormalizationInfo
+from src.pipeline.formalize.table.types import TableFormalizationInfo
 
 class APITableDependencyAnalyzer:
     """Analyze API dependencies on tables"""

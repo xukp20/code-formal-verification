@@ -3,7 +3,7 @@ from typing import Dict, List, Any, Optional
 from pathlib import Path
 import json
 from src.utils.parse_project.types import JSONSerializable
-from src.pipeline.api.types import APIFormalizationInfo
+from src.pipeline.formalize.api.types import APIFormalizationInfo
 
 @dataclass
 class APIDocInfo(JSONSerializable):

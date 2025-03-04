@@ -2,8 +2,8 @@ import asyncio
 import os
 from pathlib import Path
 from src.utils.parse_project.parser import ProjectStructure
-from src.pipeline.api.types import APIDependencyInfo
-from src.pipeline.api.api_analyzer import APIAnalyzer
+from src.pipeline.formalize.api.types import APIDependencyInfo
+from src.pipeline.formalize.api.api_analyzer import APIAnalyzer
 from logging import Logger, INFO, StreamHandler, Formatter
 
 async def test_api_analyzer():

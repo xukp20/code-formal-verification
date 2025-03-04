@@ -2,8 +2,8 @@ from typing import Dict, List, Optional, Set, Tuple
 import json
 from src.utils.parse_project.parser import ProjectStructure
 from src.utils.apis.langchain_client import _call_openai_completion_async
-from src.pipeline.api.types import APIFormalizationInfo
-from src.pipeline.api.constants import DB_API_DECLARATIONS
+from src.pipeline.formalize.api.types import APIFormalizationInfo
+from src.pipeline.formalize.api.constants import DB_API_DECLARATIONS
 from logging import Logger
 
 class APIFormalizer:
