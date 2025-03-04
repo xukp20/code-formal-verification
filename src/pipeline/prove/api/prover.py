@@ -283,12 +283,12 @@ Import Path: {project.get_test_lean_import_path('api', service_name, api_name)}
 
 """
         if partial_proof and unsolved_goals:
-            prompt += f"""Valid part of the proof:
+            prompt += f"""### Valid part of the proof
 ```lean
 {partial_proof}
 ```
 
-Current unsolved goals:
+### Unsolved goals after the valid part
 {unsolved_goals}
 
 """
@@ -302,6 +302,7 @@ Hints:
 4. If the proving strategy seems wrong, consider alternative approaches
 5. Use the unsolved goals to understand exactly what needs to be proved
 6. Keep the working parts of the proof and fix the specific step that failed
+7. If you see unknown function, maybe you have deleted some important imports or predefined helper functions that must be used here
 
 Please make sure you have '### Output\n```json' in your response."""
         
@@ -334,6 +335,11 @@ Please make sure you have '### Output\n```json' in your response."""
 {deps_prompt}
 
 {api_prompt}
+
+Please prove the given theorem.
+Add new imports and helper functions to the import prefix if needed. 
+Never remove any existing imports or helper functions.
+Keep the comment of the theorem given to you.
 
 Use '### Output\n```json' to mark the JSON section.
 """

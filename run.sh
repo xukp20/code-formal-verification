@@ -17,6 +17,8 @@ mkdir -p lean_project
 
 
 model="qwen-max-latest"
+# model="o1-mini"
+# model="gpt-4o-mini"
 
 add_mathlib=true
 
@@ -36,7 +38,8 @@ log_level="DEBUG"
 # task="theorem_generation"
 task="prove"
 
-prove_max_retries=5
+prove_max_retries=3
+prove_max_theorem_retries=4
 
 if [ "$task" == "formalization" ]; then
     command="python src/pipeline/formalization_pipeline.py \
@@ -71,6 +74,8 @@ elif [ "$task" == "prove" ]; then
 --log-model-io \
 --api-prover-max-retries $prove_max_retries \
 --table-prover-max-retries $prove_max_retries \
+--api-prover-max-theorem-retries $prove_max_theorem_retries \
+--table-prover-max-theorem-retries $prove_max_theorem_retries \
 --model $model"
 # --continue \
 # --start-state TABLE_PROOFS"

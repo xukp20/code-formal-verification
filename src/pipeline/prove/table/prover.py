@@ -112,7 +112,6 @@ you will be provided with chances to refine and fix the proof later.
 - But remember never use sorry in the proof, if you want to provide part of the proof, just stop at that point without sorry after that.
 - You can use "rfl" to leave the unfinished steps with only the comment saying what to do next.
 - When asked to fix the proof, you should focus on the first error and keep the correct part of the proof to just rewrite the wrong part.
-
 """
 
     def __init__(self, model: str = "deepseek-r1", max_retries: int = 5):
@@ -220,6 +219,7 @@ Import Path: {project.get_test_lean_import_path('table', service_name, table_nam
                     project.set_theorem_proof("table", service_name, table_name, theorem_idx, partial_proof)
                     full_code = project.concat_test_lean_code("table", service_name, table_name)
                     project.set_test_lean("table", service_name, table_name, full_code)
+
                     success, output = project._run_lake_build()
                     if not success:
                         partial_proof = "\n".join(lines[:j+1])
@@ -264,12 +264,12 @@ Import Path: {project.get_test_lean_import_path('table', service_name, table_nam
 
 """
         if partial_proof and unsolved_goals:
-            prompt += f"""Valid part of the proof:
+            prompt += f"""### Valid part of the proof
 ```lean
 {partial_proof}
 ```
 
-Current unsolved goals:
+### Unsolved goals after the valid part
 {unsolved_goals}
 
 """
@@ -283,6 +283,7 @@ Hints:
 4. If the proving strategy seems wrong, consider alternative approaches
 5. Use the unsolved goals to understand exactly what needs to be proved
 6. Keep the working parts of the proof and fix the specific step that failed
+7. If you see unknown function, maybe you have deleted some important imports or predefined helper functions that must be used here
 
 Please make sure you have '### Output\n```json' in your response."""
         
@@ -322,6 +323,11 @@ Please make sure you have '### Output\n```json' in your response."""
 {deps_prompt}
 
 {table_prompt}
+
+Please prove the given theorem.
+Add new imports and helper functions to the import prefix if needed. 
+Never remove any existing imports or helper functions.
+Keep the comment of the theorem given to you.
 
 Use '### Output\n```json' to mark the JSON section.
 """
@@ -366,6 +372,7 @@ Use '### Output\n```json' to mark the JSON section.
             project.set_test_lean("table", service_name, table_name, full_code)
 
             # Try to build
+            # input("Press Enter to continue...")
             success, compilation_error = project.build(parse=True, only_errors=True, add_context=True, only_first=True)
             
             if not success:

@@ -255,9 +255,9 @@ def main():
     parser.add_argument("--log-level", default="INFO",
                       choices=["DEBUG", "MODEL_INPUT", "MODEL_OUTPUT", "INFO", "WARNING", "ERROR", "CRITICAL"],
                       help="Set the logging level")
-    parser.add_argument("--api-prover-max-retries", type=int, default=5,
+    parser.add_argument("--api-prover-max-retries", type=int, default=3,
                       help="Maximum number of retries for API theorem proving")
-    parser.add_argument("--api-prover-max-theorem-retries", type=int, default=3,
+    parser.add_argument("--api-prover-max-theorem-retries", type=int, default=4,
                         help="Maximum number of retries for individual theorems in API theorem proving")
     parser.add_argument("--log-model-io", action="store_true",
                       help="Enable logging of model inputs and outputs")
@@ -265,9 +265,9 @@ def main():
                       help="Continue from last saved state")
     parser.add_argument("--start-state", choices=[s.name for s in PipelineState],
                       help="Start from specific state (requires --continue)")
-    parser.add_argument("--table-prover-max-retries", type=int, default=5,
+    parser.add_argument("--table-prover-max-retries", type=int, default=3,
                       help="Maximum number of retries for table theorem proving")
-    parser.add_argument("--table-prover-max-theorem-retries", type=int, default=2,
+    parser.add_argument("--table-prover-max-theorem-retries", type=int, default=4,
                         help="Maximum number of retries for individual theorems in table theorem proving")
     
     args = parser.parse_args()
