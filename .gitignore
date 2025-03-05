@@ -172,7 +172,7 @@ cython_debug/
 
 source_code/
 **/*.json
-outputs/
-data/
-lean_project/
+**/*outputs/
+**/*data/
+**/*lean_project/
 .cache/
