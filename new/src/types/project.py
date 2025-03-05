@@ -4,10 +4,13 @@ from pathlib import Path
 import json
 from collections import defaultdict
 
-from src.types.lean_file import LeanFunctionFile, LeanStructureFile, LeanTheoremFile
+from src.types.lean_file import LeanFile, LeanFunctionFile, LeanStructureFile, LeanTheoremFile
 from src.types.lean_manager import LeanProjectManager
 from src.types.lean_structure import LeanProjectStructure
 from logging import Logger
+
+logger = Logger(__name__)
+
 @dataclass
 class Dependency:
     """Dependencies of an API/Process/Table"""
@@ -102,7 +105,7 @@ class APIFunction:
             
         lines = [f"## API: {self.name}"]
         
-        if show_fields.get("planner_code", True) and self.planner_code:
+        if show_fields.get("planner_code", False) and self.planner_code:
             lines.extend([
                 "\n### Planner Code",
                 "```scala",
@@ -110,7 +113,7 @@ class APIFunction:
                 "```"
             ])
             
-        if show_fields.get("message_code", True) and self.message_code:
+        if show_fields.get("message_code", False) and self.message_code:
             lines.extend([
                 "\n### Message Code",
                 "```scala",
@@ -118,7 +121,7 @@ class APIFunction:
                 "```"
             ])
             
-        if show_fields.get("dependencies", True) and self.dependencies and any([
+        if show_fields.get("dependencies", False) and self.dependencies and any([
             self.dependencies.tables,
             self.dependencies.processes,
             self.dependencies.apis
@@ -140,19 +143,19 @@ class APIFunction:
                     ", ".join([f"{d['service']}.{d['api']}" for d in self.dependencies.apis])
                 ])
                 
-        if show_fields.get("lean_function", True) and self.lean_function:
+        if show_fields.get("lean_function", False) and self.lean_function:
             lines.extend([
                 "\n### Lean Function",
                 self.lean_function.to_markdown()
             ])
             
-        if show_fields.get("doc", True) and self.doc:
+        if show_fields.get("doc", False) and self.doc:
             lines.extend([
                 "\n### Documentation",
                 self.doc
             ])
             
-        if show_fields.get("theorems", True) and self.theorems:
+        if show_fields.get("theorems", False) and self.theorems:
             lines.append("\n### Theorems")
             for thm in self.theorems:
                 lines.extend([
@@ -180,7 +183,7 @@ class APIFunction:
             
         lines = ["## API: <name>"]
         
-        if show_fields.get("planner_code", True):
+        if show_fields.get("planner_code", False):
             lines.extend([
                 "\n### Planner Code",
                 "```scala",
@@ -188,7 +191,7 @@ class APIFunction:
                 "```"
             ])
             
-        if show_fields.get("message_code", True):
+        if show_fields.get("message_code", False):
             lines.extend([
                 "\n### Message Code",
                 "```scala",
@@ -207,19 +210,19 @@ class APIFunction:
                 "<service1.api1, service2.api2, ...>"
             ])
             
-        if show_fields.get("lean_function", True):
+        if show_fields.get("lean_function", False):
             lines.extend([
                 "\n### Lean Function",
                 "<lean function code>"
             ])
             
-        if show_fields.get("doc", True):
+        if show_fields.get("doc", False):
             lines.extend([
                 "\n### Documentation",
                 "<api documentation>"
             ])
             
-        if show_fields.get("theorems", True):
+        if show_fields.get("theorems", False):
             lines.extend([
                 "\n### Theorems",
                 "#### Theorem Description",
@@ -318,7 +321,7 @@ class Table:
             
         lines = [f"## Table: {self.name}"]
         
-        if show_fields.get("description", True) and self.description:
+        if show_fields.get("description", False) and self.description:
             lines.extend([
                 "\n### Description",
                 "```yaml",
@@ -326,7 +329,7 @@ class Table:
                 "```"
             ])
             
-        if show_fields.get("dependencies", True) and self.dependencies and any([
+        if show_fields.get("dependencies", False) and self.dependencies and any([
             self.dependencies.tables,
             self.dependencies.processes,
             self.dependencies.apis
@@ -348,13 +351,13 @@ class Table:
                     ", ".join([f"{d['service']}.{d['api']}" for d in self.dependencies.apis])
                 ])
                 
-        if show_fields.get("lean_structure", True) and self.lean_structure:
+        if show_fields.get("lean_structure", False) and self.lean_structure:
             lines.extend([
                 "\n### Lean Structure",
                 self.lean_structure.to_markdown()
             ])
             
-        if show_fields.get("properties", True) and self.properties:
+        if show_fields.get("properties", False) and self.properties:
             lines.append("\n### Properties")
             for prop in self.properties:
                 lines.extend([
@@ -385,7 +388,7 @@ class Table:
             
         lines = ["## Table: <name>"]
         
-        if show_fields.get("description", True):
+        if show_fields.get("description", False):
             lines.extend([
                 "\n### Description",
                 "```yaml",
@@ -404,13 +407,13 @@ class Table:
                 "<service1.api1, service2.api2, ...>"
             ])
             
-        if show_fields.get("lean_structure", True):
+        if show_fields.get("lean_structure", False):
             lines.extend([
                 "\n### Lean Structure",
                 "<lean structure code>"
             ])
             
-        if show_fields.get("properties", True):
+        if show_fields.get("properties", False):
             lines.extend([
                 "\n### Properties",
                 "#### Property Description",
@@ -463,7 +466,7 @@ class Process:
             
         lines = [f"## Process: {self.name}"]
         
-        if show_fields.get("code", True) and self.code:
+        if show_fields.get("code", False) and self.code:
             lines.extend([
                 "\n### Implementation",
                 "```scala",
@@ -471,7 +474,7 @@ class Process:
                 "```"
             ])
             
-        if show_fields.get("dependencies", True) and self.dependencies and any([
+        if show_fields.get("dependencies", False) and self.dependencies and any([
             self.dependencies.tables,
             self.dependencies.processes,
             self.dependencies.apis
@@ -493,7 +496,7 @@ class Process:
                     ", ".join([f"{d['service']}.{d['api']}" for d in self.dependencies.apis])
                 ])
                 
-        if show_fields.get("lean_function", True) and self.lean_function:
+        if show_fields.get("lean_function", False) and self.lean_function:
             lines.extend([
                 "\n### Lean Function",
                 self.lean_function.to_markdown()
@@ -512,7 +515,7 @@ class Process:
             
         lines = ["## Process: <name>"]
         
-        if show_fields.get("code", True):
+        if show_fields.get("code", False):
             lines.extend([
                 "\n### Implementation",
                 "```scala",
@@ -531,7 +534,7 @@ class Process:
                 "<service1.api1, service2.api2, ...>"
             ])
             
-        if show_fields.get("lean_function", True):
+        if show_fields.get("lean_function", False):
             lines.extend([
                 "\n### Lean Function",
                 "<lean function code>"
@@ -703,6 +706,18 @@ class ProjectStructure:
             api_topological_order=data.get('api_topological_order', [])
         )
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ProjectStructure':
+        """Load project structure from dictionary"""
+        return cls(
+            name=data.get('name'),
+            base_path=Path(data.get('base_path')),
+            lean_project_name=data.get('lean_project_name'),
+            lean_project_path=Path(data.get('lean_project_path')),
+            services=[Service.from_dict(s) for s in data.get('services', [])],
+            api_topological_order=data.get('api_topological_order', [])
+        )
+
     def save(self, path: Path) -> None:
         """Save project structure to JSON file"""
         with open(path, 'w') as f:
@@ -765,13 +780,9 @@ class ProjectStructure:
         try:
             doc_path = self.base_path / self.name / self.name
             code_path = self.base_path / f"{self.name}Code"
-            print(doc_path)
-            print(code_path)
-            print(self.name)
 
             # Parse each service directory
             for service_dir in doc_path.glob("*Service"):
-                print(service_dir)
                 if not service_dir.is_dir():
                     continue
                     
@@ -825,4 +836,314 @@ class ProjectStructure:
             
         except Exception as e:
             return False, f"Failed to initialize Lean repository: {str(e)}" 
+
+    # Lookup methods
+    def get_service(self, service_name: str) -> Optional[Service]:
+        """Get service by name"""
+        for service in self.services:
+            if service.name == service_name:
+                return service
+        return None
+
+    def get_table(self, service_name: str, table_name: str) -> Optional[Table]:
+        """Get table by service and name"""
+        for service in self.services:
+            if service.name == service_name:
+                for table in service.tables:
+                    if table.name == table_name:
+                        return table
+        return None
+
+    def get_table_property(self, service_name: str, table_name: str, 
+                          property_id: int) -> Optional[TableProperty]:
+        """Get table property by service, table and property index"""
+        table = self.get_table(service_name, table_name)
+        if table and 0 <= property_id < len(table.properties):
+            return table.properties[property_id]
+        return None
+
+    def get_table_theorem(self, service_name: str, table_name: str,
+                         property_id: int, theorem_id: int) -> Optional[TableTheorem]:
+        """Get table theorem by service, table, property and theorem index"""
+        prop = self.get_table_property(service_name, table_name, property_id)
+        if prop and 0 <= theorem_id < len(prop.theorems):
+            return prop.theorems[theorem_id]
+            
+        return None
+
+    def get_api(self, service_name: str, api_name: str) -> Optional[APIFunction]:
+        """Get API by service and name"""
+        for service in self.services:
+            if service.name == service_name:
+                for api in service.apis:
+                    if api.name == api_name:
+                        return api
+        return None
+    
+    def get_api_theorem(self, service_name: str, api_name: str, theorem_id: int) -> Optional[APITheorem]:
+        """Get API theorem by service, API and theorem index"""
+        api = self.get_api(service_name, api_name)
+        if api and 0 <= theorem_id < len(api.theorems):
+            return api.theorems[theorem_id]
+        return None
+    
+    def get_process(self, service_name: str, process_name: str) -> Optional[Process]:
+        """Get process by service and name"""
+        for service in self.services:
+            if service.name == service_name:
+                for process in service.processes:
+                    if process.name == process_name:
+                        return process
+        return None
+    
+    # Lean file initialization
+    def init_table_structure(self, service_name: str, table_name: str) -> Optional[LeanStructureFile]:
+        """Initialize empty Lean structure file for table"""
+        table = self.get_table(service_name, table_name)
+        if not table:
+            return None
+            
+        # Create empty structure file
+        relative_path = LeanProjectStructure.get_table_path(
+            self.lean_project_name, service_name, table_name)
+        table.lean_structure = LeanStructureFile(relative_path=relative_path)
         
+        # Write empty content to file
+        self._write_lean_file(table.lean_structure)
+        
+        return table.lean_structure
+    
+    def _delete_file(self, file_path: Path) -> None:
+        """Delete file from disk"""
+        if file_path.exists():
+            file_path.unlink()
+
+    def delete_table_structure(self, service_name: str, table_name: str) -> None:
+        """Delete Lean structure file for table"""
+        table = self.get_table(service_name, table_name)
+        if not table:
+            return
+            
+        # Delete structure file
+        file_path = LeanProjectStructure.to_file_path(
+            self.lean_project_path, table.lean_structure.relative_path)
+        self._delete_file(file_path)
+
+        table.lean_structure = None
+
+        self._update_basic_lean()
+            
+    def init_table_theorem(self, service_name: str, table_name: str,
+                          property_id: int, theorem_id: int, negative: bool = False) -> Optional[TableTheorem]:
+        """Initialize empty Lean theorem file for table"""
+        theorem = self.get_table_theorem(service_name, table_name, property_id, theorem_id)
+        if not theorem:
+            return None
+        
+        # Create empty theorem file
+        relative_path = LeanProjectStructure.get_table_theorem_path(
+            self.lean_project_name, service_name, table_name, property_id, theorem_id, negative)
+        
+        if negative:
+            theorem.theorem_negative = LeanTheoremFile(relative_path=relative_path)
+            self._write_lean_file(theorem.theorem_negative)
+            return theorem.theorem_negative
+        else:
+            theorem.theorem = LeanTheoremFile(relative_path=relative_path)
+            self._write_lean_file(theorem.theorem)
+            return theorem.theorem
+        
+    def delete_table_theorem(self, service_name: str, table_name: str,
+                            property_id: int, theorem_id: int, negative: bool = False) -> None:
+        """Delete Lean theorem file for table"""
+        theorem = self.get_table_theorem(service_name, table_name, property_id, theorem_id)
+        if not theorem:
+            return
+        
+        if negative:
+            file_path = LeanProjectStructure.to_file_path(
+                self.lean_project_path, theorem.theorem_negative.relative_path)
+            self._delete_file(file_path)
+            theorem.theorem_negative = None
+        else:
+            file_path = LeanProjectStructure.to_file_path(
+                self.lean_project_path, theorem.theorem.relative_path)
+            self._delete_file(file_path)
+            theorem.theorem = None
+        
+        self._update_basic_lean()
+
+    def init_api_function(self, service_name: str, api_name: str) -> Optional[LeanFunctionFile]:
+        """Initialize empty Lean structure file for API"""
+        api = self.get_api(service_name, api_name)
+        if not api:
+            return None
+            
+        # Create empty function file
+        relative_path = LeanProjectStructure.get_api_path(
+            self.lean_project_name, service_name, api_name)
+        api.lean_function = LeanFunctionFile(relative_path=relative_path)
+        
+        # Write empty content to file
+        self._write_lean_file(api.lean_function)
+        
+        return api.lean_function
+    
+    def delete_api_function(self, service_name: str, api_name: str) -> None:
+        """Delete Lean structure file for API"""
+        api = self.get_api(service_name, api_name)
+        if not api:
+            return
+
+        # Delete function file
+        file_path = LeanProjectStructure.to_file_path(
+            self.lean_project_path, api.lean_function.relative_path)
+        self._delete_file(file_path)
+
+        api.lean_function = None
+        self._update_basic_lean()
+            
+    def init_api_theorem(self, service_name: str, api_name: str, theorem_id: int, negative: bool = False) -> Optional[APITheorem]:
+        """Initialize empty Lean theorem file for API"""
+        theorem = self.get_api_theorem(service_name, api_name, theorem_id)
+        if not theorem:
+            return None
+            
+        # Create empty theorem file
+        relative_path = LeanProjectStructure.get_api_theorem_path(
+            self.lean_project_name, service_name, api_name, theorem_id, negative)
+        
+        if negative:
+            theorem.theorem_negative = LeanTheoremFile(relative_path=relative_path)
+            self._write_lean_file(theorem.theorem_negative)
+            return theorem.theorem_negative
+        else:
+            theorem.theorem = LeanTheoremFile(relative_path=relative_path)
+            self._write_lean_file(theorem.theorem)
+            return theorem.theorem
+
+    def delete_api_theorem(self, service_name: str, api_name: str, theorem_id: int, negative: bool = False) -> None:
+        """Delete Lean theorem file for API"""
+        theorem = self.get_api_theorem(service_name, api_name, theorem_id)
+        if not theorem:
+            return
+        
+        if negative:
+            file_path = LeanProjectStructure.to_file_path(
+                self.lean_project_path, theorem.theorem_negative.relative_path)
+            self._delete_file(file_path)
+            theorem.theorem_negative = None
+        else:
+            file_path = LeanProjectStructure.to_file_path(
+                self.lean_project_path, theorem.theorem.relative_path)
+            self._delete_file(file_path)
+            theorem.theorem = None
+        
+        self._update_basic_lean()
+
+    def init_process_function(self, service_name: str, process_name: str) -> Optional[LeanFunctionFile]:
+        """Initialize empty Lean structure file for process"""
+        process = self.get_process(service_name, process_name)
+        if not process:
+            return None
+            
+        # Create empty function file
+        relative_path = LeanProjectStructure.get_process_path(
+            self.lean_project_name, service_name, process_name)
+        process.lean_function = LeanFunctionFile(relative_path=relative_path)
+        
+        # Write empty content to file
+        self._write_lean_file(process.lean_function)
+        
+        return process.lean_function
+
+    def delete_process_function(self, service_name: str, process_name: str) -> None:
+        """Delete Lean structure file for process"""
+        process = self.get_process(service_name, process_name)
+        if not process:
+            return  
+            
+        # Delete function file
+        file_path = LeanProjectStructure.to_file_path(
+            self.lean_project_path, process.lean_function.relative_path)
+        self._delete_file(file_path)
+
+        process.lean_function = None
+        self._update_basic_lean()
+
+    # File operations
+    def _write_lean_file(self, lean_file: LeanFile) -> None:
+        """Write Lean file content to disk"""
+        file_path = LeanProjectStructure.to_file_path(
+            self.lean_project_path, lean_file.relative_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(lean_file.generate_content())
+        self._update_basic_lean()
+
+    def update_lean_file(self, lean_file: LeanFile, content: Dict[str, Any]) -> None:
+        """Update Lean file content and sync to disk"""
+        lean_file.set_fields(content)
+        self._write_lean_file(lean_file)
+
+    def restore_lean_file(self, lean_file: LeanFile) -> None:
+        """Restore Lean file from backup and sync to disk"""
+        lean_file.restore()
+        self._write_lean_file(lean_file)
+
+    def _update_basic_lean(self) -> None:
+        """Update Basic.lean with imports for all non-empty Lean files"""
+        import_paths = []
+        
+        # Collect all non-empty Lean files
+        for service in self.services:
+            for table in service.tables:
+                if table.lean_structure:
+                    path = LeanProjectStructure.to_import_path(
+                        table.lean_structure.relative_path)
+                    import_paths.append(path)
+                if table.properties:
+                    for prop in table.properties:
+                        if prop.theorems:
+                            for thm in prop.theorems:
+                                if thm.theorem:
+                                    path = LeanProjectStructure.to_import_path(
+                                        thm.theorem.relative_path)
+                                    import_paths.append(path)
+                                if thm.theorem_negative:
+                                    path = LeanProjectStructure.to_import_path(
+                                        thm.theorem_negative.relative_path)
+                                    import_paths.append(path)
+                                    
+            for api in service.apis:
+                if api.lean_function:
+                    path = LeanProjectStructure.to_import_path(
+                        api.lean_function.relative_path)
+                    import_paths.append(path)
+                if api.theorems:
+                    for thm in api.theorems:
+                        if thm.theorem:
+                            path = LeanProjectStructure.to_import_path(
+                                thm.theorem.relative_path)
+                            import_paths.append(path)
+                        if thm.theorem_negative:
+                            path = LeanProjectStructure.to_import_path(
+                                thm.theorem_negative.relative_path)
+                            import_paths.append(path)
+                            
+            for process in service.processes:
+                if process.lean_function:
+                    path = LeanProjectStructure.to_import_path(
+                        process.lean_function.relative_path)
+                    import_paths.append(path)
+                    
+        # Write imports to Basic.lean
+        basic_path = LeanProjectStructure.get_basic_path(self.lean_project_name)
+        basic_file = LeanProjectStructure.to_file_path(
+            self.lean_project_path, basic_path)
+        content = "\n".join(f"import {path}" for path in sorted(import_paths))
+        basic_file.write_text(content)
+        
+    # build
+    def build(self, parse: bool = False, only_errors: bool = False, add_context: bool = False, only_first: bool = False) -> Tuple[bool, str]:
+        """Build the project"""
+        return LeanProjectManager.build(self.lean_project_path, parse, only_errors, add_context, only_first)

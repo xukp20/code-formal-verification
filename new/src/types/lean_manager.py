@@ -309,8 +309,6 @@ lean_lib «{name}» {{
         details = parse_lean_message_details(
             messages,
             only_errors=only_errors,
-            add_context=add_context,
-            only_first=only_first
         )
         
         if not details:

@@ -43,8 +43,7 @@ class LeanProjectStructure:
     @staticmethod
     def to_file_path(project_root: Path, relative_path: List[str]) -> Path:
         """Convert relative path list to absolute file path"""
-        relative_path[-1] = relative_path[-1] + ".lean"
-        return project_root.joinpath(*relative_path)
+        return project_root.joinpath(*relative_path[:-1]) / (relative_path[-1] + ".lean")
     
     @staticmethod
     def to_import_path(path: List[str]) -> str:

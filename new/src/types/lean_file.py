@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 
 from src.types.lean_structure import LeanProjectStructure
@@ -10,7 +10,38 @@ class LeanFile:
     
     # Relative path from Lean project root
     relative_path: List[str]
+    _backup: Optional[Dict[str, Any]] = field(default=None, repr=False)
     
+    def set_fields(self, fields: Dict[str, Any]) -> None:
+        """Set fields from dictionary, ignoring relative_path"""
+        for field_name, value in fields.items():
+            if field_name != 'relative_path' and hasattr(self, field_name):
+                setattr(self, field_name, value)
+                
+    def backup(self) -> None:
+        """Create backup of current field values"""
+        self._backup = {
+            k: v for k, v in self.__dict__.items() 
+            if k != 'relative_path' and k != '_backup'
+        }
+        
+    def restore(self) -> None:
+        """Restore field values from backup"""
+        if self._backup is None:
+            raise ValueError("No backup exists")
+        self.set_fields(self._backup)
+
+    @staticmethod
+    def get_structure() -> str:
+        """Get the structure template for this Lean file type"""
+        return """
+-- imports
+<import statements>
+
+-- <other sections based on file type>
+<section content>
+"""
+
     def generate_content(self) -> str:
         """Generate complete file content by concatenating all non-empty fields
         
@@ -21,7 +52,7 @@ class LeanFile:
         
         # Get all fields except relative_path
         fields = {k: v for k, v in self.__dict__.items() 
-                 if k != 'relative_path' and v is not None and v != ''}
+                 if k != 'relative_path' and k != '_backup' and v is not None and v != ''}
         
         # Add each field with comment
         for field_name, field_value in fields.items():
@@ -35,11 +66,11 @@ class LeanFile:
 
     def to_markdown(self, add_import_path: bool = True) -> str:
         """Convert Lean file to markdown format"""
-        content = self.generate_content()
+        content = "```lean\n" + self.generate_content() + "\n```"
         if add_import_path:
             import_path = LeanProjectStructure.to_import_path(self.relative_path)
-            content = f"-- import path: {import_path}\n\n{content}"
-        return "```lean\n" + content + "\n```"
+            content = "Import path: " + import_path + "\n" + content
+        return content
 
     @classmethod
     def parse_content(cls, content: str) -> Dict[str, str]:
@@ -82,12 +113,43 @@ class LeanFunctionFile(LeanFile):
     helper_functions: str = ""
     main_function: str = ""
 
+    @staticmethod
+    def get_structure() -> str:
+        return """
+-- imports
+<imports needed>
+
+-- helper_functions
+def helperFunction (x : Type) : Type := 
+  <implementation>
+
+-- main_function
+def mainFunction (x : Type) : Type :=
+  <implementation>
+"""
+
 @dataclass 
 class LeanStructureFile(LeanFile):
     """Structure for Lean structure definition files"""
     
     imports: str = ""
     structure_definition: str = ""
+
+    @staticmethod
+    def get_structure() -> str:
+        return """
+-- imports
+<imports needed>
+
+-- structure_definition
+structure NestedStructure where
+  field1 : Type
+  field2 : Type
+
+structure MyStructure where
+  field1 : NestedStructure
+  field2 : Type
+"""
 
 @dataclass
 class LeanTheoremFile(LeanFile):
@@ -98,6 +160,33 @@ class LeanTheoremFile(LeanFile):
     comment: str = ""
     theorem_unproved: str = ""  # With sorry
     theorem_proved: Optional[str] = None  # Complete proof
+    
+    @staticmethod
+    def get_structure(proved: bool = True) -> str:
+        base = """
+-- imports
+<imports needed>
+
+-- helper_functions
+def helperFunction (x : Type) : Type := 
+  <implementation>
+
+-- comment
+/- Theorem description and explanation -/
+"""
+        if proved:
+            base += """
+-- theorem_proved
+theorem myTheorem (x : Type) : Type := by
+  <complete proof>
+"""
+        else:
+            base += """
+-- theorem_unproved
+theorem myTheorem (x : Type) : Type := by
+  sorry
+"""
+        return base
     
     def generate_content(self) -> str:
         """Override to use proved theorem if available"""
