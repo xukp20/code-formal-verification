@@ -185,7 +185,7 @@ theorem myTheorem (x : Type) : Type := by
 -- theorem_unproved
 theorem myTheorem (x : Type) : Type := by
   sorry
-"""
+""" 
         return base
     
     def generate_content(self) -> str:
@@ -223,7 +223,7 @@ theorem myTheorem (x : Type) : Type := by
                 self.theorem_proved,
                 ""
             ])
-        else:
+        elif self.theorem_unproved:
             content.extend([
                 "-- theorem unproved",
                 self.theorem_unproved,

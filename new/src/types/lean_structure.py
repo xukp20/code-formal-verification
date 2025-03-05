@@ -29,11 +29,11 @@ class LeanProjectStructure:
         return [package, service, "Tests", "APIs", api_name, f"Theorem{theorem_idx}{suffix}"]
     
     @staticmethod
-    def get_table_theorem_path(package: str, service: str, table_name: str,
+    def get_table_theorem_path(package: str, service: str, table_name: str, property_idx: int,
                              theorem_idx: int, negative: bool = False) -> List[str]:
         """Get relative path for Table theorem file"""
         suffix = "Neg" if negative else ""
-        return [package, service, "Tests", "Tables", table_name, f"Theorem{theorem_idx}{suffix}"]
+        return [package, service, "Tests", "Tables", table_name, f"Property{property_idx}", f"Theorem{theorem_idx}{suffix}"]
     
     @staticmethod
     def get_basic_path(package: str) -> List[str]:

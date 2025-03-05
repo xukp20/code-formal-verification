@@ -178,6 +178,10 @@ class FormalizationPipeline(PipelineBase):
 
         self.save_state(FormalizationState.COMPLETED)
 
+        if not project:
+            project = ProjectStructure.from_dict(self.load_output(FormalizationState.API_FORMALIZATION))
+        self.save_output(FormalizationState.COMPLETED, project.to_dict())
+
         self.logger.info("Formalization pipeline completed successfully")
         return True
     

@@ -154,6 +154,13 @@ class APIFunction:
                 "\n### Documentation",
                 self.doc
             ])
+
+        if show_fields.get("requirements", False) and self.theorems:
+            lines.append("\n### Requirements")
+            for thm in self.theorems:
+                lines.extend([
+                    "- " + thm.description
+                ])
             
         if show_fields.get("theorems", False) and self.theorems:
             lines.append("\n### Theorems")

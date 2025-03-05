@@ -207,29 +207,31 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)
                 
-                # Update Lean file
-                project.update_lean_file(lean_file, fields)
-                
-                # Try compilation
-                success, error = project.build(parse=True, only_errors=True)
-                if success:
-                    if logger:
-                        logger.debug(f"Successfully formalized API: {api.name}")
-                    return True
-                    
-                # Restore on failure
-                project.restore_lean_file(lean_file)
-                error_message = error
-                history.extend([
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": response}
-                ])
-                
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to parse LLM response: {e}")
                 project.restore_lean_file(lean_file)
                 continue
+
+            
+            # Update Lean file
+            project.update_lean_file(lean_file, fields)
+            
+            # Try compilation
+            success, error = project.build(parse=True, add_context=True, only_errors=True)
+            if success:
+                if logger:
+                    logger.debug(f"Successfully formalized API: {api.name}")
+                return True
+                
+            # Restore on failure
+            project.restore_lean_file(lean_file)
+            error_message = error
+            history.extend([
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": response}
+            ])
+            
                 
         # Clean up on failure
         project.delete_api_function(service.name, api.name)

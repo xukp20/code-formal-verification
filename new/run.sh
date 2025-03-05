@@ -28,8 +28,8 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-task="formalize"
-# task="theorem_generate"
+# task="formalize"
+task="theorem_generate"
 # task="prove"
 
 prove_max_retries=3
@@ -51,7 +51,16 @@ if [ "$task" == "formalize" ]; then
         command="$command --add-mathlib"
     fi
 elif [ "$task" == "theorem_generate" ]; then
-    echo "TODO"
+    command="python src/pipelines/generate_theorems_pipeline.py \
+--project-name $project_name \
+--output-base-path $output_base_path \
+--doc-path $doc_path \
+--project-base-path $project_base_path \
+--log-level $log_level \
+--log-model-io \
+--model $model \
+--continue "
+
 elif [ "$task" == "prove" ]; then
     echo "TODO"
 else
