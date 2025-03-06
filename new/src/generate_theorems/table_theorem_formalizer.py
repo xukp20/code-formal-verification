@@ -187,6 +187,7 @@ Property: {property.description}
             
             # Get description out of fields
             description = fields["description"]
+            theorem.description = description
             fields = {k: v for k, v in fields.items() if k != "description"}
 
             # Update theorem file

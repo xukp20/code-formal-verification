@@ -36,11 +36,11 @@ task="theorem_generate"
 # task="prove"
 
 max_theorem_retries=5
-max_global_attempts=3
+max_global_attempts=4
 max_examples=3
 
-# continue=true
-# start_state="TABLE_DEPENDENCY"
+continue=true
+start_state="API_THEOREMS"
 
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \
@@ -71,7 +71,10 @@ elif [ "$task" == "prove" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model"
+--model $model \
+--max-theorem-retries $max_theorem_retries \
+--max-global-attempts $max_global_attempts \
+--max-examples $max_examples"
 
 else
     echo "Invalid task"

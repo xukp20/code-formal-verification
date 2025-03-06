@@ -40,6 +40,9 @@ Important:
 - Documentation should be clear and complete
 - Maintain original documentation meaning
 - Only include APIs from the provided list
+- The Json dict starts from the ServiceName key, so you should not include the project name as the highest level key
+- Just ignore the project name if it is in the documentation
+- Write all the documentation in English
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 

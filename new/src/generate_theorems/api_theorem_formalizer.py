@@ -12,6 +12,9 @@ class APITheoremFormalizer:
     
     ROLE_PROMPT = """You are a theorem formalizer for Lean 4 code, specializing in converting API requirements into formal theorems. You excel at creating precise mathematical representations of API behaviors while maintaining semantic correctness."""
 
+#    - If you believe the helper function from the API file that you want to use is easy and clear enough so that it is correct and need no more proof, you can import and use it.
+#    - Or else you should define the helper function in the theorem file.
+
     SYSTEM_PROMPT = """Background:
 We need to formalize API requirements into Lean 4 theorems that verify API behavior.
 
@@ -36,9 +39,8 @@ File Structure Requirements:
      ```
 
 2. Helper Functions:
-   - In the theorem, you should avoid using the helper functions defined in the API file you need to verify, as they are not proved yet.
-   - So you need to define any helper functions needed for the theorem in the theorem file.
-   - Only when you are sure the helper function from the API file that you want to use is easy and clear enough so that it is correct and need no more proof, you can import and use it.
+   - Import and reuse the helper functions from the API file as much as possible
+   - Try not to define new helper functions if you can use the existing ones
    - Keep functions small and focused
    - Example:
      ```lean
@@ -110,7 +112,7 @@ Important:
 - Use original requirement as comment
 - Make theorem specific and precise
 - Use sorry for proofs
-
+- Try not to define new helper functions if you can use the existing ones
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 

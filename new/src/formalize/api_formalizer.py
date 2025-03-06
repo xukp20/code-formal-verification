@@ -23,20 +23,24 @@ Convert the given API implementation into Lean 4 code following these requiremen
 {structure_template}
 
 2. Database Operations:
-   - For API, each table accessed should have a corresponding parameter in the function signature
-     * Input parameter: old_<table_name>: <TableName>
-     * Output parameter: new_<table_name>: <TableName>
-   - For read-only: return input table unchanged
-   - Example:
-     ```lean
-     def updateUser (id: Nat) (name: String) (old_user_table: UserTable) : UpdateResult × UserTable := 
-       // ... implementation ...
-       return (UpdateResult.Success, new_user_table)
-     ```
+   - ! Always input and output the related tables in the main function of the API
+    - For API, each table accessed should have a corresponding parameter in the function signature
+        * Input parameter: old_<table_name>: <TableName>
+        * Output parameter: new_<table_name>: <TableName>
+    - For read-only: return input table unchanged
+    - Example:
+        ```lean
+        def updateUser (id: Nat) (name: String) (old_user_table: UserTable) : UpdateResult × UserTable := 
+        // ... implementation ...
+        return (UpdateResult.Success, new_user_table)
+        ```
+
    - You are given the scala code of the database APIs, but they should not be used in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.
-   - For the helper functions, if they don't change the table, you are not required to input and output the table parameters.
-   - Only make sure every API has the related tables as parameters and return the updated tables as outputs.
    
+   - ! Keep the helper functions easy:
+     - For the helper functions, if they don't change the table, you should not input and output the table parameters.
+     - Only make sure every API has the related tables as parameters and return the updated tables as outputs.
+
 3. Return Types:
    - Use explicit inductive types for outcomes
    - Common patterns:
@@ -46,6 +50,7 @@ Convert the given API implementation into Lean 4 code following these requiremen
        | NotFound : String → OperationResult
        | Error : String → OperationResult
      ```
+   - Replace the OperationResult with a meaning result type
    - Use these types to represent success/failure states
    - Include meaningful messages in constructors
    - Handle all error cases without panic!

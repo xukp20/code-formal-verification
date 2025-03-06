@@ -53,14 +53,12 @@ File Structure Requirements:
    - Replace 'sorry' with complete proof
    - Use proper Lean 4 tactics
    - Follow proof state carefully
-   - Handle all cases
    - No 'sorry' allowed in final proof
 
 3. Proof Style:
-   - Use comments for key steps before the Lean code
+   - Add comments before each of the tactics you use
    - Follow Lean 4 conventions
    - Maintain readable formatting
-   - Use tactics to break the proof into clear steps
 
 Write comprehensive comment before each step, for example:
 ```lean
@@ -83,19 +81,14 @@ Step-by-step reasoning of your proof strategy
 ### Output
 ```json
 {{
-  "theorem_proved": "string of complete theorem with proof"
+  "imports": "string of imports, with addition to the original imports if new imports or open commands are added. If no change, you can ignore this field",
+  "helper_functions": "string of helper functions, with addition to the original helper functions if new helper functions are added. If no change, you can ignore this field",
+  "theorem_proved": "string of complete theorem with proof, only the theorem part not the comment and other parts"
 }}
 ```
-
-Hints:
-- You can use "unfold" to expand the definition of a function
-- You can write a not complete proof at first to see the proof state after the partial proof you provided, 
-you will be provided with chances to refine and fix the proof later.
-- But remember never use sorry in the proof, if you want to provide part of the proof, just stop at that point without sorry after that.
-- You can use "rfl" to leave the unfinished steps with only the comment saying what to do next.
-- When asked to fix the proof, you should focus on the first error and keep the correct part of the proof to just rewrite the wrong part.
-
-Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
+- If you want to ignore the imports or helper functions, you should not include that field in the json dict. Don't return empty string for the field because it will be used to update the field to empty string.
+- Make sure the fields in the json dict are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
+"""
 
     RETRY_PROMPT = """Proof attempt failed with error:
 {error}
@@ -218,6 +211,20 @@ Return the corrected proof in the same format."""
 ```lean
 {lean_file.generate_content()}
 ```
+
+
+Note:
+- Remember to add comments before each tactic you use so that you will think more carefully before using each tactic.
+
+Hints:
+- You can use "unfold" to expand the definition of a function
+- You can write a not complete proof at first to see the proof state after the partial proof you provided, 
+you will be provided with chances to refine and fix the proof later.
+- But remember never use sorry in the proof, if you want to provide part of the proof, just stop at that point without sorry after that.
+- You can use "rfl" to leave the unfinished steps with only the comment saying what to do next.
+- When asked to fix the proof, you should focus on the first error and keep the correct part of the proof to just rewrite the wrong part.
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
 
         # Try proving with retries
@@ -271,10 +278,10 @@ Return the corrected proof in the same format."""
                 continue
 
             # Update theorem file
-            project.update_lean_file(lean_file, {"theorem_proved": fields["theorem_proved"]})
+            project.update_lean_file(lean_file, fields)
             
             # Try compilation
-            input("Press Enter to continue...")
+            # input("Press Enter to continue...")
             success, error_message = project.build(parse=True, add_context=True, only_errors=True, only_first=True)
             
             if success:

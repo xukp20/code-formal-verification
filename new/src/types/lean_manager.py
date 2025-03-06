@@ -310,6 +310,9 @@ lean_lib «{name}» {{
             messages,
             only_errors=only_errors,
         )
+
+        if only_first:
+            details = details[:1]
         
         if not details:
             return success, f"No errors or warnings found in \n{output}" if success else f"Build failed with no parseable errors:\n{output}"

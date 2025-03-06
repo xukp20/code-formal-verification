@@ -36,9 +36,12 @@ Specific Requirements:
    - Record count changes (whether operations add, remove, or preserve record counts)
    - Existence guarantees (whether specific records must exist or not exist)
 4. Please don't focus on the response of the API, only on the effect on the table, describing the status of the input table, and the relationship between the input params and the table (exists or not), then describe the status of the table after the API is applied
+5. You maybe get a group properties based on the group of APIs, like some of them will increase the record count by 1, some of them will decrease the record count by 1, some of them will preserve the record count, which will give you three properties
+6. You may consider the different behaviors of the APIs given the different input related to the table status, like the record is in the table or not, which will give you more properties
 
 Example property:
 "If the current table has no duplicate records in field X, then after applying any of these APIs, the table will still have no duplicate records in field X"
+"After calling the delete API of the account, the table will not have any record with that account id"
 
 Return your analysis in two parts:
 ### Analysis
@@ -109,7 +112,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
 
         if logger:
             logger.model_output(f"Table property analysis response for {table.name}:\n{response}")
-
+            
         # Parse response
         try:
             json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()

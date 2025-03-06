@@ -16,8 +16,8 @@ class TheoremGenerationState(Enum):
     """Theorem generation pipeline states"""
     INIT = 0
     API_REQUIREMENTS = 1
-    TABLE_PROPERTIES = 2
-    API_THEOREMS = 3
+    API_THEOREMS = 2
+    TABLE_PROPERTIES = 3
     TABLE_THEOREMS = 4
     COMPLETED = 5
 
@@ -114,24 +114,12 @@ class TheoremGenerationPipeline(PipelineBase):
             self.save_output(TheoremGenerationState.API_REQUIREMENTS, project.to_dict())
             self.logger.info("API requirements generated")
 
-        # Analyze table properties
-        if start_state <= TheoremGenerationState.TABLE_PROPERTIES:
-            self.save_state(TheoremGenerationState.TABLE_PROPERTIES)
-            self.logger.info("3. Analyzing table properties...")
-            if not project:
-                project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.API_REQUIREMENTS))
-            
-            analyzer = TablePropertyAnalyzer(model=self.model)
-            project = await analyzer.analyze(project, self.logger)
-            self.save_output(TheoremGenerationState.TABLE_PROPERTIES, project.to_dict())
-            self.logger.info("Table properties analyzed")
-
         # Formalize API theorems
         if start_state <= TheoremGenerationState.API_THEOREMS:
             self.save_state(TheoremGenerationState.API_THEOREMS)
-            self.logger.info("4. Formalizing API theorems...")
+            self.logger.info("3. Formalizing API theorems...")
             if not project:
-                project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.TABLE_PROPERTIES))
+                project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.API_REQUIREMENTS))
             
             formalizer = APITheoremFormalizer(
                 model=self.model,
@@ -141,12 +129,26 @@ class TheoremGenerationPipeline(PipelineBase):
             self.save_output(TheoremGenerationState.API_THEOREMS, project.to_dict())
             self.logger.info("API theorems formalized")
 
+        # Analyze table properties
+        if start_state <= TheoremGenerationState.TABLE_PROPERTIES:
+            self.save_state(TheoremGenerationState.TABLE_PROPERTIES)
+            self.logger.info("4. Analyzing table properties...")
+            if not project:
+                project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.API_THEOREMS))
+            
+            analyzer = TablePropertyAnalyzer(
+                model=self.model
+            )
+            project = await analyzer.analyze(project, self.logger)
+            self.save_output(TheoremGenerationState.TABLE_PROPERTIES, project.to_dict())
+            self.logger.info("Table properties analyzed")
+
         # Formalize table theorems
         if start_state <= TheoremGenerationState.TABLE_THEOREMS:
             self.save_state(TheoremGenerationState.TABLE_THEOREMS)
             self.logger.info("5. Formalizing table theorems...")
             if not project:
-                project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.API_THEOREMS))
+                project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.TABLE_PROPERTIES))
             
             formalizer = TableTheoremFormalizer(
                 model=self.model,

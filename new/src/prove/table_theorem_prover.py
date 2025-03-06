@@ -52,14 +52,10 @@ File Structure Requirements:
 2. Proof Requirements:
    - Replace 'sorry' with complete proof
    - Use proper Lean 4 tactics
-   - Follow proof state carefully
-   - Handle all cases
    - No 'sorry' allowed in final proof
 
 3. Proof Style:
-   - Start with high-level strategy
-   - Break into clear steps
-   - Use comments for key steps
+   - Add comments before each of the tactics you use
    - Follow Lean 4 conventions
    - Maintain readable formatting
 
@@ -87,7 +83,7 @@ Step-by-step reasoning of your proof strategy
 ### Output
 ```json
 {{
-  "theorem_proved": "string of complete theorem with proof"
+  "theorem_proved": "string of complete theorem with proof, only the theorem part not the comment and other parts"
 }}
 ```
 
@@ -273,7 +269,7 @@ Return the corrected proof in the same format."""
             project.update_lean_file(lean_file, {"theorem_proved": fields["theorem_proved"]})
             
             # Try compilation
-            input("Press Enter to continue...")
+            # input("Press Enter to continue...")
             success, error_message = project.build(parse=True, add_context=True, only_errors=True)
             
             if success:
