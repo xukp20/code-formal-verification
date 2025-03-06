@@ -93,13 +93,13 @@ Step-by-step reasoning of your formalization process
 <complete file content following the structure template>
 ```
 
-### Output
+### Output  
 ```json
 {{
-  "imports": "import statements",
-  "helper_functions": "helper function definitions",
-  "comment": "original requirement as comment",
-  "theorem_unproved": "theorem statement with sorry"
+  "imports": "string of import statements",
+  "helper_functions": "string of helper function definitions",
+  "comment": "string of original requirement as comment, write as a Lean comment",
+  "theorem_unproved": "string of theorem statement with sorry"
 }}
 ```
 

@@ -34,9 +34,9 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-# task="formalization"
+task="formalization"
 # task="theorem_generation"
-task="prove"
+# task="prove"
 
 prove_max_retries=3
 prove_max_theorem_retries=4
@@ -61,9 +61,7 @@ elif [ "$task" == "theorem_generation" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model \
---continue \
---start-state TABLE_THEOREMS"
+--model $model"
 
 elif [ "$task" == "prove" ]; then
     command="python src/pipeline/prove_pipeline.py \

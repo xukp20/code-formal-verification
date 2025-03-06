@@ -632,6 +632,41 @@ class ProjectStructure:
     services: List[Service] = field(default_factory=list)
     api_topological_order: List[Tuple[str, str]] = field(default_factory=list)  # List of (service_name, api_name)
 
+    # Automatically write all the LeanFile objs in the project after initialization to the lean project
+    def write_lean_files(self) -> None:
+        """Write all LeanFile objs in the project to the lean project"""
+        for service in self.services:
+            for api in service.apis:
+                if api.lean_function:
+                    self._write_lean_file(api.lean_function)
+                if api.theorems:
+                    for theorem in api.theorems:
+                        if theorem.theorem:
+                            self._write_lean_file(theorem.theorem)
+                        if theorem.theorem_negative:
+                            self._write_lean_file(theorem.theorem_negative)
+                    
+            for table in service.tables:
+                if table.lean_structure:
+                    self._write_lean_file(table.lean_structure)
+                if table.properties:
+                    for property in table.properties:
+                        if property.theorems:
+                            for theorem in property.theorems:
+                                if theorem.theorem:
+                                    self._write_lean_file(theorem.theorem)
+                                if theorem.theorem_negative:
+                                    self._write_lean_file(theorem.theorem_negative)
+
+            for process in service.processes:
+                if process.code:
+                    self._write_lean_file(process.code)
+
+        # try build the lean project
+        success, error = LeanProjectManager.build(self.lean_project_path)
+        if not success:
+            raise Exception(f"Failed to build the lean project: {error}")
+    
     def sort_apis(self) -> List[Tuple[str, str]]:
         """Sort all APIs across services based on dependencies
         
@@ -716,7 +751,7 @@ class ProjectStructure:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ProjectStructure':
         """Load project structure from dictionary"""
-        return cls(
+        project = cls(
             name=data.get('name'),
             base_path=Path(data.get('base_path')),
             lean_project_name=data.get('lean_project_name'),
@@ -724,6 +759,8 @@ class ProjectStructure:
             services=[Service.from_dict(s) for s in data.get('services', [])],
             api_topological_order=data.get('api_topological_order', [])
         )
+        project.write_lean_files()
+        return project
 
     def save(self, path: Path) -> None:
         """Save project structure to JSON file"""
@@ -1154,3 +1191,95 @@ class ProjectStructure:
     def build(self, parse: bool = False, only_errors: bool = False, add_context: bool = False, only_first: bool = False) -> Tuple[bool, str]:
         """Build the project"""
         return LeanProjectManager.build(self.lean_project_path, parse, only_errors, add_context, only_first)
+
+    def backward_build(self, lean_file: LeanTheoremFile) -> Tuple[Optional[str], Optional[str]]:
+        """Try to find the longest valid proof by backtracking
+        
+        Args:
+            lean_file: Lean theorem file to analyze
+            
+        Returns:
+            Tuple of (error_message, partial_theorem)
+            - If proof is complete: (None, complete_theorem)
+            - If has unsolved goals: (first_unsolved_goals, partial_theorem)
+            - If all attempts fail: (None, None)
+        """
+        # Backup original proof
+        original_proof = lean_file.theorem_proved
+        if not original_proof:
+            return None, None
+            
+        # Split proof into lines
+        lines = original_proof.splitlines()
+        
+        for i in range(len(lines)-1, -1, -1):
+            # Try proof up to this line
+            partial_proof = "\n".join(lines[:i+1])
+            
+            # Update file with partial proof
+            lean_file.theorem_proved = partial_proof
+            self._write_lean_file(lean_file)
+            
+            # Try to build
+            # input("Press Enter to continue...")
+            success, output = self.build()
+            
+            if success:  # Build succeeded
+                # Keep removing lines until build fails
+                # for j in range(i, -1, -1):
+                #     partial_proof = "\n".join(lines[:j])
+                #     lean_file.theorem_proved = partial_proof
+                #     self._write_lean_file(lean_file)
+                #     success, output = self.build(parse=True, only_errors=True)
+                #     if not success:
+                #         # Found first failing point, use previous valid proof
+                #         partial_proof = "\n".join(lines[:j+1])
+                #         # Restore original proof before returning
+                #         lean_file.theorem_proved = original_proof
+                #         self._write_lean_file(lean_file)
+                #         return None, partial_proof
+
+                # Removing all the comments until meet a valid line 
+                for j in range(i, -1, -1):
+                    line = lines[j]
+                    if not line.strip().startswith("--") and line.strip():
+                        break
+                partial_proof = "\n".join(lines[:j+1])
+                # Restore original proof before returning
+                lean_file.theorem_proved = original_proof
+                self._write_lean_file(lean_file)
+                return None, partial_proof
+                
+            # Parse errors
+            from src.utils.lean.build_parser import (
+                parse_build_output_to_messages,
+                parse_lean_message_details,
+                all_errors_are_unsolved_goals
+            )
+            
+            messages = parse_build_output_to_messages(output)
+            if not messages:
+                continue
+
+            # Check if all errors are unsolved goals
+            if all_errors_are_unsolved_goals(messages):
+                # Get first unsolved goals error
+                details = parse_lean_message_details(messages, only_errors=True)
+                if details:
+                    unsolved_goals = details[0]["content"]
+                    # Remove all the comments until meet a valid line 
+                    for j in range(i, -1, -1):
+                        line = lines[j]
+                        if not line.strip().startswith("--") and line.strip():
+                            break
+                    partial_proof = "\n".join(lines[:j+1])
+
+                    # Restore original proof before returning
+                    lean_file.theorem_proved = original_proof
+                    self._write_lean_file(lean_file)
+                    return unsolved_goals, partial_proof
+        
+        # Restore original proof if no valid partial proof found
+        lean_file.theorem_proved = original_proof
+        self._write_lean_file(lean_file)
+        return None, None

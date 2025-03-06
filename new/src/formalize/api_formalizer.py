@@ -23,7 +23,7 @@ Convert the given API implementation into Lean 4 code following these requiremen
 {structure_template}
 
 2. Database Operations:
-   - For each table accessed:
+   - For API, each table accessed should have a corresponding parameter in the function signature
      * Input parameter: old_<table_name>: <TableName>
      * Output parameter: new_<table_name>: <TableName>
    - For read-only: return input table unchanged
@@ -33,7 +33,10 @@ Convert the given API implementation into Lean 4 code following these requiremen
        // ... implementation ...
        return (UpdateResult.Success, new_user_table)
      ```
-
+   - You are given the scala code of the database APIs, but they should not be used in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.
+   - For the helper functions, if they don't change the table, you are not required to input and output the table parameters.
+   - Only make sure every API has the related tables as parameters and return the updated tables as outputs.
+   
 3. Return Types:
    - Use explicit inductive types for outcomes
    - Common patterns:
@@ -79,9 +82,9 @@ Return your response in two parts:
 ### Output
 ```json
 {{
-  "imports": "import statements",
-  "helper_functions": "helper function definitions",
-  "main_function": "main function definition"
+  "imports": "string of import statements",
+  "helper_functions": "string of helper function definitions",
+  "main_function": "string of main function definition"
 }}
 ```
 """
@@ -141,6 +144,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             "```scala",
             DB_API_DECLARATIONS,
             "```",
+            "(The Database API Interface is only for reference, you should not use it in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.)",
             APIFormalizer._format_table_dependencies(project, service, table_deps),
             APIFormalizer._format_api_dependencies(project, api_deps),
             "\n# Current API",

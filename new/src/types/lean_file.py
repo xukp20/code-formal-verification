@@ -54,16 +54,46 @@ class LeanFile:
         fields = {k: v for k, v in self.__dict__.items() 
                  if k != 'relative_path' and k != '_backup' and v is not None and v != ''}
         
+        # Put imports at the beginning
+        if self.imports:
+            content.extend([
+                "-- imports",
+                self.imports,
+                ""
+            ])
+
+        # Add namespace
+        content.extend([
+            "-- namespace",
+            self.get_namespace(),
+            ""
+        ])
+        
         # Add each field with comment
         for field_name, field_value in fields.items():
-            content.extend([
-                f"-- {field_name}",
-                field_value,
-                ""  # Empty line after each field
-            ])
+            if field_name != "imports":
+                content.extend([
+                    f"-- {field_name}",
+                    field_value,
+                    ""  # Empty line after each field
+                ])
+
+        # Add end namespace
+        content.extend([
+            "-- end namespace",
+            self.get_end_namespace(),
+        ])
             
         return "\n".join(content)
+    
+    def get_namespace(self) -> str:
+        """Get the namespace for the current file"""
+        return "namespace " + LeanProjectStructure.to_import_path(self.relative_path)
 
+    def get_end_namespace(self) -> str:
+        """Get the end namespace for the current file"""
+        return "end " + LeanProjectStructure.to_import_path(self.relative_path)
+    
     def to_markdown(self, add_import_path: bool = True) -> str:
         """Convert Lean file to markdown format"""
         content = "```lean\n" + self.generate_content() + "\n```"
@@ -117,7 +147,10 @@ class LeanFunctionFile(LeanFile):
     def get_structure() -> str:
         return """
 -- imports
-<imports needed>
+<imports needed, including import and open commands of other files>
+
+-- namespace
+namespace <current file path>  -- This is automatically generated
 
 -- helper_functions
 def helperFunction (x : Type) : Type := 
@@ -126,6 +159,9 @@ def helperFunction (x : Type) : Type :=
 -- main_function
 def mainFunction (x : Type) : Type :=
   <implementation>
+
+-- end namespace
+end <current file path>  -- This is automatically generated
 """
 
 @dataclass 
@@ -139,7 +175,10 @@ class LeanStructureFile(LeanFile):
     def get_structure() -> str:
         return """
 -- imports
-<imports needed>
+<imports needed, including import and open commands of other files>
+
+-- namespace
+namespace <current file path>  -- This is automatically generated
 
 -- structure_definition
 structure NestedStructure where
@@ -149,6 +188,9 @@ structure NestedStructure where
 structure MyStructure where
   field1 : NestedStructure
   field2 : Type
+
+-- end namespace
+end <current file path>  -- This is automatically generated
 """
 
 @dataclass
@@ -165,7 +207,10 @@ class LeanTheoremFile(LeanFile):
     def get_structure(proved: bool = True) -> str:
         base = """
 -- imports
-<imports needed>
+<imports needed, including import and open commands of other files>
+
+-- namespace
+namespace <current file path>  -- This is automatically generated
 
 -- helper_functions
 def helperFunction (x : Type) : Type := 
@@ -179,12 +224,18 @@ def helperFunction (x : Type) : Type :=
 -- theorem_proved
 theorem myTheorem (x : Type) : Type := by
   <complete proof>
+
+-- end namespace
+end <current file path>  -- This is automatically generated
 """
         else:
             base += """
 -- theorem_unproved
 theorem myTheorem (x : Type) : Type := by
   sorry
+
+-- end namespace
+end <current file path>  -- This is automatically generated
 """ 
         return base
     
@@ -199,6 +250,13 @@ theorem myTheorem (x : Type) : Type := by
                 self.imports,
                 ""
             ])
+
+        # Add namespace
+        content.extend([
+            "-- namespace",
+            self.get_namespace(),
+            ""
+        ])
             
         # Add helper functions if present
         if self.helper_functions:
@@ -229,5 +287,11 @@ theorem myTheorem (x : Type) : Type := by
                 self.theorem_unproved,
                 ""
             ])
+        
+        # Add end namespace
+        content.extend([
+            "-- end namespace",
+            self.get_end_namespace(),
+        ])
             
         return "\n".join(content) 

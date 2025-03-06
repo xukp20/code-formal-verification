@@ -64,11 +64,11 @@ Return your response in three parts:
 ### Output
 ```json
 {{
-  "description": "API-specific description",
-  "imports": "import statements",
-  "helper_functions": "helper function definitions",
-  "comment": "API-specific description",
-  "theorem_unproved": "theorem statement with sorry"
+  "description": "string of API-specific description",
+  "imports": "string of import statements",
+  "helper_functions": "string of helper function definitions",
+  "comment": "string of API-specific description as comment, write as a Lean comment",
+  "theorem_unproved": "string of theorem statement with sorry"
 }}
 ```
 
@@ -249,7 +249,7 @@ Property: {property.description}
                         
                         if not success:
                             if logger:
-                                logger.error(f"Failed to formalize theorem for table {table.name} with API {api.name}")
+                                logger.error(f"Failed to formalize theorem for table {table.name}")
                             break
 
         return project 

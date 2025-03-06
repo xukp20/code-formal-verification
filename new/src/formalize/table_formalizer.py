@@ -60,8 +60,8 @@ Step-by-step reasoning of your formalization approach
 ### Output
 ```json
 {{
-  "imports": "import statements",
-  "structure_definition": "structure definitions"
+  "imports": "string of import statements",
+  "structure_definition": "string of structure definitions"
 }}
 ```
 

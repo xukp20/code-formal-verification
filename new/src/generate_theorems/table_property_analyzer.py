@@ -25,12 +25,17 @@ Each property should describe:
 2. What remains true after API operations
 3. Relationship between input parameters and table state
 
-Consider properties like:
-- Uniqueness constraints
-- Record count changes
-- Existence guarantees
-- Value ranges/relationships
-- Referential integrity
+Specific Requirements:
+1. Each property should describe both the current database state and the resulting state after applying the APIs
+- Like "If the current table has no duplicate records, then after applying any of these APIs, the table will still have no duplicate records"
+2. Group APIs in meaningful ways:
+   - APIs that have similar effects on the table (read-only vs. write operations)
+   - APIs from the same service that share common behaviors
+3. Consider different types of properties:
+   - Uniqueness constraints (certain fields must be unique)
+   - Record count changes (whether operations add, remove, or preserve record counts)
+   - Existence guarantees (whether specific records must exist or not exist)
+4. Please don't focus on the response of the API, only on the effect on the table, describing the status of the input table, and the relationship between the input params and the table (exists or not), then describe the status of the table after the API is applied
 
 Example property:
 "If the current table has no duplicate records in field X, then after applying any of these APIs, the table will still have no duplicate records in field X"
@@ -43,7 +48,7 @@ Step-by-step reasoning of property identification
 ```json
 [
   {
-    "property": "property description",
+    "property": "string of property description",
     "apis": ["api1", "api2", ...]
   },
   ...

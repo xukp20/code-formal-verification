@@ -8,6 +8,9 @@ export https_proxy="http://127.0.0.1:7890"
 # Set PYTHONPATH to include the src directory
 export PYTHONPATH=$(pwd)
 
+# pre download packages
+export PACKAGE_PATH=../.cache/packages
+
 # create outputs and lean_project if not exists
 mkdir -p outputs
 mkdir -p lean_project
@@ -32,9 +35,12 @@ log_level="DEBUG"
 task="theorem_generate"
 # task="prove"
 
-prove_max_retries=3
-prove_max_theorem_retries=4
+max_theorem_retries=5
+max_global_attempts=3
+max_examples=3
 
+# continue=true
+# start_state="TABLE_DEPENDENCY"
 
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \
@@ -44,8 +50,7 @@ if [ "$task" == "formalize" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model \
---continue "
+--model $model"
 
     if [ "$add_mathlib" == "true" ]; then
         command="$command --add-mathlib"
@@ -58,14 +63,27 @@ elif [ "$task" == "theorem_generate" ]; then
 --project-base-path $project_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model \
---continue "
+--model $model"
 
 elif [ "$task" == "prove" ]; then
-    echo "TODO"
+    command="python src/pipelines/prove_pipeline.py \
+--project-name $project_name \
+--output-base-path $output_base_path \
+--log-level $log_level \
+--log-model-io \
+--model $model"
+
 else
     echo "Invalid task"
     exit 1
+fi
+
+if [ "$continue" == "true" ]; then
+    command="$command --continue"
+fi
+
+if [ "$start_state" != "" ]; then
+    command="$command --start-state $start_state"
 fi
 
 eval $command
