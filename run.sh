@@ -16,9 +16,10 @@ mkdir -p outputs
 mkdir -p lean_project
 
 
-model="qwen-max-latest"
+# model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
+model="qwq-plus"
 
 add_mathlib=true
 

@@ -13,12 +13,20 @@ class APIFormalizer:
     
     ROLE_PROMPT = """You are a formal verification expert specializing in translating APIs into Lean 4 code. You excel at creating precise mathematical representations of API operations while maintaining their semantics and dependencies."""
 
-    SYSTEM_PROMPT = """Background:
+    SYSTEM_PROMPT = """
+## Background
 This software project uses multiple APIs with dependencies on tables and other APIs. You will formalize these APIs into Lean 4 code.
 
-Task:
+We have completed:
+1. Table formalization into Lean 4 structures
+2. API dependency analysis (both table and API dependencies)
+Now we need to formalize each API implementation into Lean 4 code.
+
+
+## Task
 Convert the given API implementation into Lean 4 code following these requirements:
 
+## Requirements
 1. Follow the exact file structure:
 {structure_template}
 
@@ -46,22 +54,26 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - Common patterns:
      ```lean
      inductive OperationResult where
-       | Success : String → OperationResult
-       | NotFound : String → OperationResult
-       | Error : String → OperationResult
+       | Success : OperationResult
+       | NotFound : OperationResult
+       | Error : OperationResult
      ```
    - Replace the OperationResult with a meaning result type
    - Use these types to represent success/failure states
-   - Include meaningful messages in constructors
+   - Please distinguish different types of returns, including the response type and the message string to define each of them as a different result type
+   - We don't keep the raw string in the result type, just use types to represent different results
    - Handle all error cases without panic!
    - Return values directly without IO
 
 4. Implementation Fidelity:
-   - Maintain semantic equivalence with original code
-   - Maintain the same structure of the original code, the more similar the better
-   - Try to translate the codes line by line if possible to make sure they are semantically equivalent
-   - Translate SQL operations accurately
-   - Preserve error handling logic
+   - !Top1 priority: The formalized code should be semantically equivalent to the original code, in the level of each line of code
+   - Base the formalization on the Planner code
+   - Maintain the same logical flow and operations
+   - For the db operations, you may see raw SQL code, you should make sure the formalized code is semantically equivalent to the original code.
+        - Some interfaces are provided by the table formalization, you can use them directly.
+        - But if none of the interfaces are entirely the same as the sql code, you should write the logic of handling the table by yourself, remember the equivalence is always the top priority.
+   - Except for the db operations, you should keep the original code structure and logic as much as possible, like the if-else structure, the match-case structure, etc.
+   - Preserve error handling and validation logic
 
 5. Code Structure
    - Keep the original code organization
@@ -70,15 +82,22 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - Maintain the same function hierarchy
    - Example:
      ```lean
-     def validateInput (input: String) : Option String := ...
-     def processData (data: String) : Result := ...
-     def mainFunction (input: String) : Result := ...
+     def validateInput (input: String) : Bool := ...
+     def processData (data: String) (old_table: Table) : Result := ...
      ```
 
 6. Function Naming
    - Try to use the same name as the original code
+   - The main function of the API should be named as the API name, but following the Lean 4 naming convention, like `userLogin`.
 
-Return your response in two parts:
+   
+## Output
+Return your response in three parts:
+
+### Analysis
+Step-by-step reasoning of your formalization approach
+
+(Use ```lean and ``` to wrap the code, not ```lean4!)
 ### Lean Code
 ```lean
 <complete file content following the structure template>
@@ -87,20 +106,29 @@ Return your response in two parts:
 ### Output
 ```json
 {{
-  "imports": "string of import statements",
-  "helper_functions": "string of helper function definitions",
+  "imports": "string of import statements and open commands",
+  "helper_functions": "string of helper function definitions or type definitions",
   "main_function": "string of main function definition"
 }}
 ```
 """
 
-    RETRY_PROMPT = """Compilation failed with error:
+    RETRY_PROMPT = """
+Generate lean file:
+{lean_file}
+    
+Compilation failed with error:
 {error}
 
 Please fix the Lean code while maintaining the same structure:
 {structure_template}
 
 Return both the corrected code and parsed fields.
+
+Hints:
+- Remember to add open commands to your imports to open the imported namespace after imports, these open commands should be in the imports field of the json
+- All the newly defined helper functions and types should be in the helper_functions field of the json
+
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
 
@@ -112,31 +140,37 @@ Make sure you have "### Output\n```json" in your response so that I can find the
     def _format_table_dependencies(project: ProjectStructure, service: Service, 
                                  table_deps: List[str]) -> str:
         """Format dependent tables with their descriptions and Lean code"""
-        lines = ["# Table Dependencies"]
-        for table_name in table_deps:
-            table = project.get_table(service.name, table_name)
-            if not table:
-                continue
-            lines.extend([
-                table.to_markdown(show_fields={"description": True, "lean_structure": True})
-            ])
+        if table_deps:
+            lines = ["# Table Dependencies"]
+            for table_name in table_deps:
+                table = project.get_table(service.name, table_name)
+                if not table:
+                    continue
+                lines.extend([
+                    table.to_markdown(show_fields={"description": True, "lean_structure": True})
+                ])
+        else:
+            lines = []
         return "\n".join(lines)
 
     @staticmethod
     def _format_api_dependencies(project: ProjectStructure, api_deps: List[Tuple[str, str]]) -> str:
         """Format dependent APIs with their implementations and Lean code"""
-        lines = ["# API Dependencies"]
-        for service_name, api_name in api_deps:
-            api = project.get_api(service_name, api_name)
-            if not api:
-                continue
-            lines.extend([
-                api.to_markdown(show_fields={
-                    "planner_code": True, 
-                    "message_code": True, 
-                    "lean_function": True
-                })
-            ])
+        if api_deps:
+            lines = ["# API Dependencies"]
+            for service_name, api_name in api_deps:
+                api = project.get_api(service_name, api_name)
+                if not api:
+                    continue
+                lines.extend([
+                    api.to_markdown(show_fields={
+                        "planner_code": True, 
+                        "message_code": True, 
+                        "lean_function": True
+                    })
+                ])
+        else:
+            lines = []
         return "\n".join(lines)
 
     @staticmethod
@@ -149,11 +183,17 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             "```scala",
             DB_API_DECLARATIONS,
             "```",
-            "(The Database API Interface is only for reference, you should not use it in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.)",
+            "(The Database API Interface is only for reference, you should not use it in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.)\n\n",
             APIFormalizer._format_table_dependencies(project, service, table_deps),
             APIFormalizer._format_api_dependencies(project, api_deps),
             "\n# Current API",
-            api.to_markdown(show_fields={"planner_code": True, "message_code": True})
+            api.to_markdown(show_fields={"planner_code": True, "message_code": True}),
+            "\nInstructions: ",
+            "1. Keep the original code structure and logic as much as possible, like the if-else structure, the match-case structure, etc.",
+            "2. The formalized code should be semantically equivalent to the original code, in the level of each function or each line of code",
+            "3. You can add some comments to explain the code, but don't add too many comments, only add comments to the key steps and important parts.",
+            "4. I take the final output only from the Json part, so make sure to put everything in the Lean file into those fields and make no omission.",
+            "Make sure you have '### Output\n```json' in your response so that I can find the Json easily."
         ]
         return "\n".join(parts)
 
@@ -183,6 +223,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         # Try formalization with retries
         history = []
         error_message = None
+        lean_file_content = None
 
         for attempt in range(self.max_retries):
             # Backup current state
@@ -190,7 +231,8 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             
             # Call LLM
             prompt = (self.RETRY_PROMPT.format(error=error_message, 
-                     structure_template=structure_template) if attempt > 0 
+                     structure_template=structure_template,
+                     lean_file=lean_file_content) if attempt > 0 
                      else f"{system_prompt}\n\n{user_prompt}")
             
             if logger:
@@ -232,6 +274,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 if logger:
                     logger.debug(f"Successfully formalized API: {api.name}")
                 return True
+            lean_file_content = lean_file.to_markdown()
                 
             # Restore on failure
             project.restore_lean_file(lean_file)

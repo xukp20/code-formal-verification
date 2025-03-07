@@ -32,23 +32,50 @@ Then, formalize this specific description into a Lean 4 theorem that:
 
 File Structure Requirements:
 1. Imports Section:
-   - Import table structure
-   - Import API implementation
-   - Use correct import paths
+   - Import all required APIs and tables from dependencies
+   - Use correct import paths based on project structure
+   - The open commands for the imported APIs and tables should also be in this part, after all the imports
+   - Example:
+     ```lean
+     import Project.Service.API
+     import Project.Service.Table
+     open Project.Service.API
+     open Project.Service.Table
+     ```
 
 2. Helper Functions:
-   - Define any needed helper functions
-   - Keep functions focused and reusable
+   - Import and reuse the helper functions from the API file as much as possible
+   - Try not to define new helper functions if you can use the existing ones
+   - Keep functions small and focused
+   - New type definitions should be in the helper_functions field of the file too, if needed
+   - Example:
+     ```lean
+     def isValidState (table : Table) : Bool := ...
+     def checkCondition (input : Type) : Bool := ...
+     ```
 
 3. Comment:
    - Use the API-specific description as comment
    - Format as a Lean comment
-
+   - Remember to add /- and -/ at the beginning and end of the comment
+    
 4. Theorem:
    - Name should reflect the property for this API
    - Include necessary parameters
    - Specify pre and post conditions
    - Use 'sorry' for proof
+   - The theorem should be structured that each parameter, hypothesis, and conclusion should be clearly defined.
+   - Example:
+    ```lean
+    theorem userRegisterPreservesUniquePhoneNumbers
+        (phoneNumber : String)
+        (password : String)
+        (old_user_table : UserTable)
+        (h_unique_initially : hasUniquePhoneNumbers old_user_table) :
+        let (result, new_user_table) := userRegister phoneNumber password old_user_table;
+        hasUniquePhoneNumbers new_user_table := by
+    sorry
+    ```
 
 Return your response in three parts:
 ### Analysis
@@ -65,16 +92,20 @@ Return your response in three parts:
 ```json
 {{
   "description": "string of API-specific description",
-  "imports": "string of import statements",
-  "helper_functions": "string of helper function definitions",
-  "comment": "string of API-specific description as comment, write as a Lean comment",
+  "imports": "string of import statements and open commands",
+  "helper_functions": "string of helper function definitions or extra type definitions",
+  "comment": "/- string of API-specific description as comment, write as a Lean comment -/",
   "theorem_unproved": "string of theorem statement with sorry"
 }}
 ```
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
-    RETRY_PROMPT = """Compilation failed with error:
+    RETRY_PROMPT = """
+Lean theorem file content created from your previous response:
+{lean_file}
+
+Compilation failed with error:
 {error}
 
 Please fix the Lean code while maintaining the same structure:
@@ -85,6 +116,10 @@ Make sure to:
 2. Maintain the same theorem logic
 3. Use correct import paths
 4. Follow Lean 4 syntax
+
+Hints:
+- Remember to add open commands to your imports to open the imported namespace after imports, these open commands should be in the imports field of the json
+- All the newly defined helper functions and types should be in the helper_functions field of the json
 
 Return both the corrected code and parsed fields.
 Make sure you have "### Output\n```json" in your response."""
@@ -143,6 +178,7 @@ Property: {property.description}
         # Try formalization with retries
         history = []
         error_message = None
+        lean_file_content = None
 
         for attempt in range(self.max_retries):
             if logger:
@@ -154,7 +190,8 @@ Property: {property.description}
             # Prepare prompt
             prompt = (self.RETRY_PROMPT.format(
                 error=error_message, 
-                structure_template=structure_template
+                structure_template=structure_template,
+                lean_file=lean_file_content
             ) if attempt > 0 else system_prompt + "\n\n" + user_prompt)
             
             if logger:
@@ -195,6 +232,7 @@ Property: {property.description}
             
             # Try compilation
             success, error = project.build(parse=True, add_context=True, only_errors=True)
+            lean_file_content = lean_file.to_markdown()
             
             if success:
                 if logger:

@@ -62,11 +62,26 @@ File Structure Requirements:
 
 Write comprehensive comment before each step, for example:
 ```lean
--- Step 1: Unfold the definition of performUserLogin
-unfold performUserLogin
+theorem user_login_success {{phoneNumber : String}} {{password : String}} 
+  (old_user_table : UserTable)
+  (h_user_exists : queryUserRecord phoneNumber old_user_table)
+  (h_password_matches : getStoredPassword phoneNumber old_user_table = some password)
+  (h_unique_record : ¬ hasMultipleRecords phoneNumber old_user_table) :
+  let (result, new_user_table) := performUserLogin phoneNumber password old_user_table;
+  result = LoginResult.Success "登录成功" ∧ new_user_table = old_user_table := 
+by
+  -- Step 1: Unfold the definition of performUserLogin
+  unfold performUserLogin
 
--- Step 2: Simplify the if-then-else expression using h_no_user
-simp [h_no_user]
+  -- Step 2: Simplify the first if condition using h_user_exists
+  simp [h_user_exists]
+
+  -- Step 3: Analyze the password validation step
+  -- Unfold validatePassword to inspect its behavior
+  unfold validatePassword
+
+  -- Use h_password_matches to simplify the match expression
+  simp [h_password_matches]
 ```
 
 Return your response in three parts:
@@ -82,7 +97,7 @@ Step-by-step reasoning of your proof strategy
 ```json
 {{
   "imports": "string of imports, with addition to the original imports if new imports or open commands are added. If no change, you can ignore this field",
-  "helper_functions": "string of helper functions, with addition to the original helper functions if new helper functions are added. If no change, you can ignore this field",
+  "helper_functions": "string of helper functions or extra type definitions, with addition to the original helper functions or type definitions if new helper functions or type definitions are added. If no change, you can ignore this field",
   "theorem_proved": "string of complete theorem with proof, only the theorem part not the comment and other parts"
 }}
 ```
@@ -102,16 +117,17 @@ Current proof state:
 ### Unsolved goals after the valid part
 {unsolved_goals}
 
-Please fix the proof while maintaining the same strategy:
-{structure_template}
 
-Focus on:
-1. Addressing the specific error
-2. Following the proof state
-3. Using correct tactics
-4. Maintaining proof structure
+Hints:
+1. If you see "no goals to be solved", the proof may be complete at that point
+2. If you see "unknown tactic", check tactic name and required imports
+3. If you see "type mismatch", verify argument types carefully
+4. If the proving strategy seems wrong, consider alternative approaches
+5. Use the unsolved goals to understand exactly what needs to be proved
+6. Keep the working parts of the proof and fix the specific step that failed
+7. If you see unknown function, maybe you have deleted some important imports or predefined helper functions that must be used here
 
-Return the corrected proof in the same format."""
+Please make sure you have '### Output\n```json' in your response."""
 
     def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3, 
                  max_examples: int = 5, max_global_attempts: int = 3):
@@ -225,6 +241,8 @@ you will be provided with chances to refine and fix the proof later.
 - When asked to fix the proof, you should focus on the first error and keep the correct part of the proof to just rewrite the wrong part.
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
+
+Please prove the given theorem.
 """
 
         # Try proving with retries
@@ -257,7 +275,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 system_prompt=self.ROLE_PROMPT,
                 user_prompt=prompt,
                 history=history,
-                temperature=0.3
+                temperature=0.0
             )
             
             if logger:

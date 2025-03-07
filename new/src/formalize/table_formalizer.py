@@ -60,7 +60,7 @@ Step-by-step reasoning of your formalization approach
 ### Output
 ```json
 {{
-  "imports": "string of import statements",
+  "imports": "string of import statements and open commands",
   "structure_definition": "string of structure definitions"
 }}
 ```
@@ -87,16 +87,18 @@ Make sure you have "### Output\n```json" in your response so that I can find the
     def _format_dependencies(project: ProjectStructure, service: Service, 
                            table: Table) -> str:
         """Format dependent tables with their descriptions and Lean code"""
-        lines = []
-        for dep_name in table.dependencies.tables:
-            dep_table = project.get_table(service.name, dep_name)
-            if not dep_table:
-                continue
-                
-            lines.extend([
-                dep_table.to_markdown(show_fields={"description": True, "lean_structure": True})
-            ])
-            
+        if table.dependencies.tables:
+            lines = ["# Table Dependencies"]
+            for dep_name in table.dependencies.tables:
+                dep_table = project.get_table(service.name, dep_name)
+                if not dep_table:
+                    continue
+                    
+                lines.extend([
+                    dep_table.to_markdown(show_fields={"description": True, "lean_structure": True})
+                ])
+        else:
+            lines = []
         return "\n".join(lines)
 
     @staticmethod
@@ -111,10 +113,10 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         parts = [
             "# Table Formalization",
             f"Service: {service.name}",
-            "# Dependencies",
             TableFormalizer._format_dependencies(project, service, table),
             "# Current Table",
-            TableFormalizer._format_input(table)
+            TableFormalizer._format_input(table),
+            "Make sure you have '### Output\n```json' in your response so that I can find the Json easily."
         ]
         return "\n".join(parts)
 

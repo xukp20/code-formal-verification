@@ -18,6 +18,8 @@ mkdir -p lean_project
 model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
+# model="qwq-plus"
+# model="deepseek-r1"
 
 add_mathlib=true
 
@@ -39,8 +41,9 @@ max_theorem_retries=5
 max_global_attempts=4
 max_examples=3
 
-continue=true
-start_state="API_THEOREMS"
+# continue=true
+# start_state="API_THEOREMS"
+# start_state="API_FORMALIZATION"
 
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \
