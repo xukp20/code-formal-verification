@@ -204,7 +204,7 @@ def main():
                       help="Model to use for analysis and formalization")
     parser.add_argument("--table-formalizer-retries", type=int, default=3,
                       help="Maximum retries for table formalizer")
-    parser.add_argument("--api-formalizer-retries", type=int, default=5,
+    parser.add_argument("--api-formalizer-retries", type=int, default=8,
                       help="Maximum retries for API formalizer")
     
     # Logging settings

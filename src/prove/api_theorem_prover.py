@@ -360,32 +360,40 @@ Please prove the given theorem.
             unproved_count = 0
             
             # Try to prove all unproved theorems
-            for service in project.services:
-                for api in service.apis:
-                    if api.theorems:
-                        for id, theorem in enumerate(api.theorems):
-                            if not theorem.theorem or theorem.theorem.theorem_proved:
-                                continue
-                            
-                            # Collect fresh examples before each theorem attempt
-                            examples = self._collect_examples(project, self.max_examples)
+            # for service in project.services:
+            #     for api in service.apis:
+            # Run in topological order
+            for service_name, api_name in project.api_topological_order:
+                service = project.get_service(service_name)
+                if not service:
+                    continue
+                api = project.get_api(service_name, api_name)
+                if not api:
+                    continue
+                if api.theorems:
+                    for id, theorem in enumerate(api.theorems):
+                        if not theorem.theorem or theorem.theorem.theorem_proved:
+                            continue
+                        
+                        # Collect fresh examples before each theorem attempt
+                        examples = self._collect_examples(project, self.max_examples)
+                        if logger:
+                            logger.info(f"Collected {len(examples)} proof examples for {api.name} theorem {id}")
+                        
+                        success = await self.prove_theorem(
+                            project=project,
+                            service=service,
+                            api=api,
+                            theorem=theorem,
+                            theorem_id=id,
+                            examples=examples,
+                            logger=logger
+                        )
+                        
+                        if not success:
+                            unproved_count += 1
                             if logger:
-                                logger.info(f"Collected {len(examples)} proof examples for {api.name} theorem {id}")
-                            
-                            success = await self.prove_theorem(
-                                project=project,
-                                service=service,
-                                api=api,
-                                theorem=theorem,
-                                theorem_id=id,
-                                examples=examples,
-                                logger=logger
-                            )
-                            
-                            if not success:
-                                unproved_count += 1
-                                if logger:
-                                    logger.warning(f"Failed to prove theorem for API: {api.name}")
+                                logger.warning(f"Failed to prove theorem for API: {api.name}")
                                 
             # Check if all theorems are proved
             if unproved_count == 0:

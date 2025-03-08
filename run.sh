@@ -24,9 +24,10 @@ model="qwen-max-latest"
 add_mathlib=true
 
 
-project_name="UserAuthenticationProject11"
+# project_name="UserAuthenticationProject11"
+project_name="BankAccount8"
 
-project_base_path="../source_code"
+project_base_path="source_code"
 lean_base_path="lean_project"
 output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
@@ -34,14 +35,14 @@ doc_path=$project_base_path/$project_name/"doc.md"
 log_level="DEBUG"
 
 # task="formalize"
-# task="theorem_generate"
-task="prove"
+task="theorem_generate"
+# task="prove"
 
 max_theorem_retries=8
 max_global_attempts=3
 max_examples=3
 
-continue=true
+# continue=true
 # start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
 # start_state="TABLE_THEOREMS"

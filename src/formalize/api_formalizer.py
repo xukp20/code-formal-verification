@@ -48,8 +48,18 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - ! Keep the helper functions easy:
      - For the helper functions, if they don't change the table, you should not input and output the table parameters.
      - Only make sure every API has the related tables as parameters and return the updated tables as outputs.
+   - Note that we need to check the correctness of the API, by examining both the output and the new table status, so you MUST NOT ignore any updated table by assuming it is not changed.
+   - You should always take the updated tables from a helper function that uses the table or a dependent API to use it for the future operations until return it as the part of the return value.
 
-3. Return Types:
+3. API dependencies:
+   - A call to another API is in the format of xxxMessage.send in the Planner code, and you should import and open the dependent API file and formalize the api call as a function call to that API which is already formalized.
+   - If the formalized function of the dependent API has any table as an input, you should `import and open` that table file (which can be copied from the import part of the dependent API file), and then:
+    - If the input table is not formalized as a input/output pair yet, you should add it to the input/output pair of the current API so that we can use the old table as the input parameter to the dependent API.
+        - For example, the current API A use table X, and calls API B that use table Y, you should import and open both X and Y, and A is defined with two table parameters like (old_x_table: XTable, old_y_table: YTable), and you should return the updated tables as outputs.
+    - If the required table of the dependent API is already formalized as a input/output pair, just use that for the input parameter and remember to update the table after the dependent API call.
+   - Check the return type of the dependent API, to handle each part and each situation correctly.
+
+4. Outcome Types:
    - Use explicit inductive types for outcomes
    - Common patterns:
      ```lean
@@ -65,7 +75,11 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - Handle all error cases without panic!
    - Return values directly without IO
 
-4. Implementation Fidelity:
+5. Return Types:
+   - The final return type of the function should be the outcome type together with all the tables that are input in the function signature
+   - For example, if the function is defined as def foo (old_x_table: XTable) (old_y_table: YTable) : FooResult × XTable × YTable := ..., you should return FooResult × XTable × YTable in the return type.
+
+6. Implementation Fidelity:
    - !Top1 priority: The formalized code should be semantically equivalent to the original code, in the level of each line of code
    - Base the formalization on the Planner code
    - Maintain the same logical flow and operations
@@ -75,7 +89,7 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - Except for the db operations, you should keep the original code structure and logic as much as possible, like the if-else structure, the match-case structure, etc.
    - Preserve error handling and validation logic
 
-5. Code Structure
+7. Code Structure
    - Keep the original code organization
    - Create helper functions matching internal methods
    - Use meaningful names for all functions
@@ -86,9 +100,9 @@ Convert the given API implementation into Lean 4 code following these requiremen
      def processData (data: String) (old_table: Table) : Result := ...
      ```
 
-6. Function Naming
+8. Function Naming
    - Try to use the same name as the original code
-   - The main function of the API should be named as the API name, but following the Lean 4 naming convention, like `userLogin`.
+   - The main function of the API should be named as the API name, but following the Lean 4 naming convention, like `userLogin` or `balanceQuery` or `userRegister`
 
    
 ## Output
@@ -164,8 +178,8 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                     continue
                 lines.extend([
                     api.to_markdown(show_fields={
-                        "planner_code": True, 
-                        "message_code": True, 
+                        # "planner_code": True, 
+                        # "message_code": True, 
                         "lean_function": True
                     })
                 ])
@@ -250,6 +264,8 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 logger.model_output(f"LLM response:\n{response}")
                 
             if not response:
+                error_message = "Failed to get LLM response"
+                project.restore_lean_file(lean_file)
                 continue
                 
             # Parse response
@@ -261,6 +277,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to parse LLM response: {e}")
+                error_message = str(e)
                 project.restore_lean_file(lean_file)
                 continue
 
@@ -269,7 +286,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             project.update_lean_file(lean_file, fields)
             
             # Try compilation
-            success, error = project.build(parse=True, add_context=True, only_errors=True)
+            success, error_message = project.build(parse=True, add_context=True, only_errors=True)
             if success:
                 if logger:
                     logger.debug(f"Successfully formalized API: {api.name}")
@@ -278,7 +295,6 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 
             # Restore on failure
             project.restore_lean_file(lean_file)
-            error_message = error
             history.extend([
                 {"role": "user", "content": prompt},
                 {"role": "assistant", "content": response}

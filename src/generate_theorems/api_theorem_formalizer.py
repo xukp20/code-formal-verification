@@ -295,32 +295,35 @@ Service: {service.name}
         if logger:
             logger.info(f"Formalizing API theorems for project: {project.name}")
             
-        for service in project.services:
+        # Run in topological order
+        for service_name, api_name in project.api_topological_order:
+            service = project.get_service(service_name)
+            if not service:
+                continue
+            api = project.get_api(service_name, api_name)
+            if not api:
+                continue
             if logger:
-                logger.info(f"Processing service: {service.name}")
-                
-            for api in service.apis:
+                logger.info(f"Processing API: {api.name}")
+                    
+            if not api.theorems:
                 if logger:
-                    logger.info(f"Processing API: {api.name}")
-                    
-                if not api.theorems:
+                    logger.warning(f"No theorems to formalize for API: {api.name}")
+                continue
+                
+            for id, theorem in enumerate(api.theorems):
+                success = await self.formalize_theorem(
+                    project=project,
+                    service=service,
+                    api=api,
+                    theorem=theorem,
+                    theorem_id=id,
+                    logger=logger
+                )
+                
+                if not success:
                     if logger:
-                        logger.warning(f"No theorems to formalize for API: {api.name}")
-                    continue
-                    
-                for id, theorem in enumerate(api.theorems):
-                    success = await self.formalize_theorem(
-                        project=project,
-                        service=service,
-                        api=api,
-                        theorem=theorem,
-                        theorem_id=id,
-                        logger=logger
-                    )
-                    
-                    if not success:
-                        if logger:
-                            logger.error(f"Failed to formalize theorem for API: {api.name}")
-                        break
+                        logger.error(f"Failed to formalize theorem for API: {api.name}")
+                    break
 
         return project 

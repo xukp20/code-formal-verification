@@ -171,6 +171,8 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             if not response:
                 if logger:
                     logger.error("Failed to get LLM response")
+                error_message = "Failed to get LLM response"
+                project.restore_lean_file(lean_file)
                 continue
                 
             # Parse response
@@ -181,6 +183,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to parse LLM response: {e}")
+                error_message = str(e)
                 project.restore_lean_file(lean_file)
                 continue
 
@@ -189,7 +192,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             project.update_lean_file(lean_file, fields)
             
             # Try compilation
-            success, error = project.build(parse=True, add_context=True, only_errors=True)
+            success, error_message = project.build(parse=True, add_context=True, only_errors=True)
             if success:
                 if logger:
                     logger.debug(f"Successfully formalized table: {table.name}")
