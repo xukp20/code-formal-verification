@@ -9,44 +9,41 @@ export https_proxy="http://127.0.0.1:7890"
 export PYTHONPATH=$(pwd)
 
 # pre download packages
-export PACKAGE_PATH=../.cache/packages
+export PACKAGE_PATH=.cache/packages
 
 # create outputs and lean_project if not exists
 mkdir -p outputs
 mkdir -p lean_project
 
-model="qwen-max-latest"
+
+# model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
-# model="qwq-plus"
-# model="deepseek-r1"
+model="qwq-plus"
 
 add_mathlib=true
 
-
+# project_name="BankAccount8"
+# project_name="SimpleCalculatorBackend"
 project_name="UserAuthenticationProject11"
 
-project_base_path="../source_code"
+
+project_base_path="source_code"
 lean_base_path="lean_project"
 output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-# task="formalize"
-task="theorem_generate"
+task="formalization"
+# task="theorem_generation"
 # task="prove"
 
-max_theorem_retries=5
-max_global_attempts=4
-max_examples=3
+prove_max_retries=3
+prove_max_theorem_retries=4
 
-# continue=true
-# start_state="API_THEOREMS"
-# start_state="API_FORMALIZATION"
-
-if [ "$task" == "formalize" ]; then
-    command="python src/pipelines/formalize_pipeline.py \
+if [ "$task" == "formalization" ]; then
+    command="python src/pipeline/formalization_pipeline.py \
 --project-name $project_name \
 --project-base-path $project_base_path \
 --lean-base-path $lean_base_path \
@@ -58,38 +55,36 @@ if [ "$task" == "formalize" ]; then
     if [ "$add_mathlib" == "true" ]; then
         command="$command --add-mathlib"
     fi
-elif [ "$task" == "theorem_generate" ]; then
-    command="python src/pipelines/generate_theorems_pipeline.py \
+elif [ "$task" == "theorem_generation" ]; then
+    command="python src/pipeline/theorem_generation_pipeline.py \
 --project-name $project_name \
---output-base-path $output_base_path \
 --doc-path $doc_path \
---project-base-path $project_base_path \
+--output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
 --model $model"
 
 elif [ "$task" == "prove" ]; then
-    command="python src/pipelines/prove_pipeline.py \
+    command="python src/pipeline/prove_pipeline.py \
 --project-name $project_name \
+--project-base-path $project_base_path \
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model \
---max-theorem-retries $max_theorem_retries \
---max-global-attempts $max_global_attempts \
---max-examples $max_examples"
+--api-prover-max-retries $prove_max_retries \
+--table-prover-max-retries $prove_max_retries \
+--api-prover-max-theorem-retries $prove_max_theorem_retries \
+--table-prover-max-theorem-retries $prove_max_theorem_retries \
+--model $model"
+# --continue \
+# --start-state TABLE_PROOFS"
 
 else
-    echo "Invalid task"
+    echo "Invalid task: $task"
     exit 1
 fi
 
-if [ "$continue" == "true" ]; then
-    command="$command --continue"
-fi
+echo "Running task: $task"
+echo "Command: $command"
 
-if [ "$start_state" != "" ]; then
-    command="$command --start-state $start_state"
-fi
-
-eval $command
+$command

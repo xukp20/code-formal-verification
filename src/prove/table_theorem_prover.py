@@ -65,12 +65,6 @@ File Structure Requirements:
    - Use 'simp' for simplification
    - Use 'unfold' for expanding definitions of functions
 
-Write comprehensive comment before each step, for example:
-```lean
--- Step 1: Unfold the definition of performUserLogin
-unfold performUserLogin
-```
-
 Return your response in three parts:
 ### Analysis
 Step-by-step reasoning of your proof strategy
@@ -88,14 +82,67 @@ Step-by-step reasoning of your proof strategy
 ```
 
 Hints:
-- You can use "unfold" to expand the definition of a function
-- You can write a not complete proof at first to see the proof state after the partial proof you provided, 
-you will be provided with chances to refine and fix the proof later.
-- But remember never use sorry in the proof, if you want to provide part of the proof, just stop at that point without sorry after that.
-- You can use "rfl" to leave the unfinished steps with only the comment saying what to do next.
-- When asked to fix the proof, you should focus on the first error and keep the correct part of the proof to just rewrite the wrong part.
+1. If you see "unknown tactic", check tactic name and required imports
+2. If you see "type mismatch", verify argument types carefully
+3. If you need to figure out what is the output of a function given the input, you can use `unfold` to expand the definition of the function and then use `simp` to simplify the expression.
+4. If you need to analyze a function call with different possible outcomes, use `cases` with the function and input params to divide the proof into different cases.
+5. If the proving strategy seems wrong, consider alternative approaches
+6. Use the unsolved goals to understand exactly what needs to be proved
+7. Keep the working parts of the proof and fix the specific step that failed
+8. If you see unknown function, maybe you have deleted some important imports or predefined helper functions that must be used here
+9. Remember to add comments before each tactic you use like in the example above
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
+
+    STATIC_EXAMPLES = """
+```lean
+theorem user_login_preserves_unique_phone_numbers
+  (phoneNumber : String)
+  (password : String)
+  (old_user_table : UserTable)
+  (h_unique_initially : hasUniquePhoneNumbers old_user_table) :
+  let (result, new_user_table) := performUserLogin phoneNumber password old_user_table;
+  hasUniquePhoneNumbers new_user_table := 
+by
+  -- Step 1: Unfold the definition of performUserLogin
+  unfold performUserLogin
+
+  -- Step 2: Simplify the if-then-else expression
+  simp
+
+  -- Step 3: Analyze the two branches of the if-then-else
+  cases queryUserRecord phoneNumber old_user_table <;> simp
+
+  -- Step 4: In both branches, the output table is the same as the input table
+  · -- Case 1: User record does not exist
+    rw [h_unique_initially]
+
+  · -- Case 2: User record exists
+    rw [h_unique_initially]
+```
+
+
+```lean
+theorem user_login_preserves_record_count
+  (phoneNumber : String)
+  (password : String)
+  (old_user_table : UserTable)
+  (h_exists : old_user_table.rows.any (fun row => row.phone_number == phoneNumber)) :
+  let (result, new_user_table) := performUserLogin phoneNumber password old_user_table;
+  new_user_table.rows.length = old_user_table.rows.length :=
+by
+  -- Step 1: Unfold the definition of performUserLogin
+  unfold performUserLogin
+
+  -- Step 2: Simplify the if-then-else expression using h_exists
+  simp [h_exists]
+
+  -- Step 3: Analyze the output table
+  -- In both branches, the output table is the same as the input table
+  cases queryUserRecord phoneNumber old_user_table <;> simp
+```
+
+"""
 
     RETRY_PROMPT = """Proof attempt failed with error:
 {error}
@@ -109,16 +156,18 @@ Current proof state:
 ### Unsolved goals after the valid part
 {unsolved_goals}
 
-Please fix the proof while maintaining the same strategy:
-{structure_template}
+Hints:
+1. If you see "unknown tactic", check tactic name and required imports
+2. If you see "type mismatch", verify argument types carefully
+3. If you need to figure out what is the output of a function given the input, you can use `unfold` to expand the definition of the function and then use `simp` to simplify the expression.
+4. If you need to analyze a function call with different possible outcomes, use `cases` with the function and input params to divide the proof into different cases.
+5. If the proving strategy seems wrong, consider alternative approaches
+6. Use the unsolved goals to understand exactly what needs to be proved
+7. Keep the working parts of the proof and fix the specific step that failed
+8. If you see unknown function, maybe you have deleted some important imports or predefined helper functions that must be used here
 
-Focus on:
-1. Addressing the specific error
-2. Following the proof state
-3. Using correct tactics
-4. Maintaining proof structure
-
-Return the corrected proof in the same format."""
+Return the corrected proof in the same format.
+Please make sure you have '### Output\n```json' in your response."""
 
     def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3,
                  max_examples: int = 5, max_global_attempts: int = 3):
@@ -133,9 +182,12 @@ Return the corrected proof in the same format."""
         
         for service in project.services:
             for table in service.tables:
-                for theorem in table.theorems:
-                    if theorem.theorem and theorem.theorem.theorem_proved:
-                        proved_theorems.append(theorem.theorem.generate_content())
+                if table.properties:
+                    for property in table.properties:
+                        if property.theorems:
+                            for theorem in property.theorems:
+                                if theorem.theorem and theorem.theorem.theorem_proved:
+                                    proved_theorems.append(theorem.theorem.generate_content())
                         
         # Randomly select n examples
         if len(proved_theorems) > n:
@@ -160,7 +212,7 @@ Return the corrected proof in the same format."""
         ])
         
         # Format API theorems
-        lines.append("# API Theorems")
+        lines.append("\n\n# API Theorems")
         for theorem in api.theorems:
             if theorem.theorem and theorem.theorem.theorem_proved:
                 lines.extend([
@@ -170,10 +222,12 @@ Return the corrected proof in the same format."""
         
         # Format example proofs
         if examples:
-            lines.append("# Example Proofs")
+            lines.append("\n\n# Example Proofs")
             for example in examples:
                 lines.extend([
+                    "```lean",
                     example,
+                    "```",
                     "\n"
                 ])
         
@@ -214,6 +268,28 @@ Return the corrected proof in the same format."""
 ```lean
 {lean_file.generate_content()}
 ```
+
+Note:
+- Remember to add comments before each tactic you use so that you will think more carefully before using each tactic.
+
+Hints:
+1. If you see "unknown tactic", check tactic name and required imports
+2. If you see "type mismatch", verify argument types carefully
+3. If you need to figure out what is the output of a function given the input, you can use `unfold` to expand the definition of the function and then use `simp` to simplify the expression.
+4. If you need to analyze a function call with different possible outcomes, use `cases` with the function and input params to divide the proof into different cases.
+5. If the proving strategy seems wrong, consider alternative approaches
+6. Use the unsolved goals to understand exactly what needs to be proved
+7. Keep the working parts of the proof and fix the specific step that failed
+8. If you see unknown function, maybe you have deleted some important imports or predefined helper functions that must be used here
+
+Example of writing style:
+{self.STATIC_EXAMPLES}
+
+Please make sure the fields in the json output are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
+
+Please prove the given theorem.
 """
 
         # Try proving with retries
@@ -227,7 +303,7 @@ Return the corrected proof in the same format."""
                 logger.info(f"Attempt {attempt + 1}/{self.max_retries}")
 
             # Backup current state
-            theorem.backup()
+            lean_file.backup()
                 
             # Prepare prompt
             prompt = (self.RETRY_PROMPT.format(
@@ -263,14 +339,16 @@ Return the corrected proof in the same format."""
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to process response: {e}")
+                # restore the backup
+                project.restore_lean_file(lean_file)
                 continue
 
             # Update theorem file
-            project.update_lean_file(lean_file, {"theorem_proved": fields["theorem_proved"]})
+            project.update_lean_file(lean_file, fields)
             
             # Try compilation
             # input("Press Enter to continue...")
-            success, error_message = project.build(parse=True, add_context=True, only_errors=True)
+            success, error_message = project.build(parse=True, add_context=True, only_errors=True, only_first=True)
             
             if success:
                 if logger:
@@ -289,6 +367,8 @@ Return the corrected proof in the same format."""
             elif not partial_proof and not unsolved_goals:
                 if logger:
                     logger.warning(f"Failed to find valid partial proof for {lean_file.theorem_proved}")
+                # restore the backup
+                project.restore_lean_file(lean_file)
                 return False
                 
             # Restore on failure
@@ -311,36 +391,38 @@ Return the corrected proof in the same format."""
             if logger:
                 logger.info(f"Global attempt {global_attempt + 1}/{self.max_global_attempts}")
                 
-            # Collect examples
-            examples = self._collect_examples(project, self.max_examples)
-            if logger:
-                logger.info(f"Collected {len(examples)} proof examples")
-                
             # Track unproved theorems
             unproved_count = 0
             
             # Try to prove all unproved theorems
             for service in project.services:
                 for table in service.tables:
-                    for property in table.properties:
-                        for id, theorem in enumerate(property.theorems):
-                            if not theorem.theorem or theorem.theorem.theorem_proved:
-                                continue
-                                
-                            success = await self.prove_theorem(
-                                project=project,
-                                service=service,
-                                table=table,
-                                theorem=theorem,
-                                theorem_id=id,
-                                examples=examples,
-                                logger=logger
-                            )
-                            
-                            if not success:
-                                unproved_count += 1
-                                if logger:
-                                    logger.warning(f"Failed to prove theorem for table {table.name}")
+                    if table.properties:
+                        for property in table.properties:
+                            if property.theorems:
+                                for id, theorem in enumerate(property.theorems):
+                                    if not theorem.theorem or theorem.theorem.theorem_proved:
+                                        continue
+                                    
+                                    # Collect fresh examples before each theorem attempt
+                                    examples = self._collect_examples(project, self.max_examples)
+                                    if logger:
+                                        logger.info(f"Collected {len(examples)} proof examples for {table.name} theorem {id}")
+                                    
+                                    success = await self.prove_theorem(
+                                        project=project,
+                                        service=service,
+                                        table=table,
+                                        theorem=theorem,
+                                        theorem_id=id,
+                                        examples=examples,
+                                        logger=logger
+                                    )
+                                    
+                                    if not success:
+                                        unproved_count += 1
+                                        if logger:
+                                            logger.warning(f"Failed to prove theorem for table {table.name}")
                                 
             # Check if all theorems are proved
             if unproved_count == 0:

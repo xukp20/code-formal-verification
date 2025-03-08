@@ -63,11 +63,12 @@ class LeanFile:
             ])
 
         # Add namespace
-        content.extend([
-            "-- namespace",
-            self.get_namespace(),
-            ""
-        ])
+        if self.imports is not None:
+            content.extend([
+                "-- namespace",
+                self.get_namespace(),
+                ""
+            ])
         
         # Add each field with comment
         for field_name, field_value in fields.items():
@@ -79,10 +80,11 @@ class LeanFile:
                 ])
 
         # Add end namespace
-        content.extend([
-            "-- end namespace",
-            self.get_end_namespace(),
-        ])
+        if self.imports is not None:
+            content.extend([
+                "-- end namespace",
+                self.get_end_namespace(),
+            ])
             
         return "\n".join(content)
     
@@ -252,11 +254,12 @@ end <current file path>  -- This is automatically generated
             ])
 
         # Add namespace
-        content.extend([
-            "-- namespace",
-            self.get_namespace(),
-            ""
-        ])
+        if self.imports is not None:
+            content.extend([
+                "-- namespace",
+                self.get_namespace(),
+                ""
+            ])
             
         # Add helper functions if present
         if self.helper_functions:
@@ -289,9 +292,10 @@ end <current file path>  -- This is automatically generated
             ])
         
         # Add end namespace
-        content.extend([
-            "-- end namespace",
-            self.get_end_namespace(),
-        ])
+        if self.imports is not None:
+            content.extend([
+                "-- end namespace",
+                self.get_end_namespace(),
+            ])
             
         return "\n".join(content) 
