@@ -181,7 +181,7 @@ Please make sure you have '### Output\n```json' in your response."""
             if api.dependencies.apis:
                 lines.append("\n\n# API Dependencies")
                 for dep_api_info in api.dependencies.apis:
-                    dep_api = project.get_api(service.name, dep_api_info["name"])
+                    dep_api = project.get_api(dep_api_info[0], dep_api_info[1])
                     if dep_api:
                         lines.extend([
                             dep_api.to_markdown(show_fields={"lean_function": True})

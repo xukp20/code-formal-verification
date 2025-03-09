@@ -15,17 +15,18 @@ export PACKAGE_PATH=../.cache/packages
 mkdir -p outputs
 mkdir -p lean_project
 
-model="qwen-max-latest"
+# model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
 # model="deepseek-r1"
+model="qwq-32b"
 
 add_mathlib=true
 
 
-# project_name="UserAuthenticationProject11"
-project_name="BankAccount8"
+project_name="UserAuthenticationProject11"
+# project_name="BankAccount8"
 
 project_base_path="source_code"
 lean_base_path="lean_project"
@@ -35,8 +36,8 @@ doc_path=$project_base_path/$project_name/"doc.md"
 log_level="DEBUG"
 
 # task="formalize"
-task="theorem_generate"
-# task="prove"
+# task="theorem_generate"
+task="prove"
 
 max_theorem_retries=8
 max_global_attempts=3

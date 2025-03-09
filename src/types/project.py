@@ -16,7 +16,7 @@ class Dependency:
     """Dependencies of an API/Process/Table"""
     tables: List[str] = field(default_factory=list)
     processes: List[str] = field(default_factory=list)
-    apis: List[Dict[str, str]] = field(default_factory=list)
+    apis: List[Tuple[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
