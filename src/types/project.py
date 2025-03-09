@@ -1064,7 +1064,7 @@ class ProjectStructure:
         else:
             theorem.theorem = LeanTheoremFile(relative_path=relative_path)
             self._write_lean_file(theorem.theorem)
-            return theorem.theorem
+            return theorem.theorem    
 
     def delete_api_theorem(self, service_name: str, api_name: str, theorem_id: int, negative: bool = False) -> None:
         """Delete Lean theorem file for API"""

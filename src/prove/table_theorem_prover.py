@@ -144,7 +144,11 @@ by
 
 """
 
-    RETRY_PROMPT = """Proof attempt failed with error:
+    RETRY_PROMPT = """
+Generate proof from your response:
+{lean_file}
+
+Proof attempt failed with error:
 {error}
 
 Current proof state:
@@ -297,6 +301,7 @@ Please prove the given theorem.
         error_message = None
         partial_proof = None
         unsolved_goals = None
+        lean_file_content = None
 
         for attempt in range(self.max_retries):
             if logger:
@@ -308,6 +313,7 @@ Please prove the given theorem.
             # Prepare prompt
             prompt = (self.RETRY_PROMPT.format(
                 error=error_message,
+                lean_file=lean_file_content,
                 partial_proof=partial_proof if partial_proof else "",
                 unsolved_goals=unsolved_goals if unsolved_goals else "",
                 structure_template=structure_template
@@ -322,7 +328,7 @@ Please prove the given theorem.
                 system_prompt=self.ROLE_PROMPT,
                 user_prompt=prompt,
                 history=history,
-                temperature=0.3
+                temperature=0.0
             )
             
             if logger:
@@ -349,7 +355,7 @@ Please prove the given theorem.
             # Try compilation
             # input("Press Enter to continue...")
             success, error_message = project.build(parse=True, add_context=True, only_errors=True, only_first=True)
-            
+            lean_file_content = lean_file.to_markdown()
             if success:
                 if logger:
                     logger.info(f"Successfully proved theorem for table {table.name}")

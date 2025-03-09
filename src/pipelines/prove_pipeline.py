@@ -7,7 +7,8 @@ import json
 
 from src.pipelines.base import PipelineBase
 from src.types.project import ProjectStructure
-from src.prove.api_theorem_prover import APITheoremProver
+# from src.prove.api_theorem_prover import APITheoremProver
+from src.prove.api_theorem_prover_v2 import APITheoremProver
 from src.prove.table_theorem_prover import TableTheoremProver
 
 class ProveState(Enum):

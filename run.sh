@@ -9,7 +9,7 @@ export https_proxy="http://127.0.0.1:7890"
 export PYTHONPATH=$(pwd)
 
 # pre download packages
-export PACKAGE_PATH=../.cache/packages
+export PACKAGE_PATH=".cache/packages"
 
 # create outputs and lean_project if not exists
 mkdir -p outputs
@@ -19,8 +19,8 @@ mkdir -p lean_project
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
-# model="deepseek-r1"
-model="qwq-32b"
+model="deepseek-r1"
+# model="qwq-32b"
 
 add_mathlib=true
 
@@ -39,7 +39,7 @@ log_level="DEBUG"
 # task="theorem_generate"
 task="prove"
 
-max_theorem_retries=8
+max_theorem_retries=5
 max_global_attempts=3
 max_examples=3
 

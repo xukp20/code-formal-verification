@@ -55,6 +55,7 @@ class LLMRouter:
         backend_config = self.backends[selected_backend]
         actual_model = backend_config["models"].get(model_name, model_name)
         
+        print(f"Using {actual_model} from {selected_backend}")
         return actual_model, backend_config["base_url"], backend_config["api_key"]
 
     def get_usage_stats(self, model_name: str) -> Dict[str, int]:
