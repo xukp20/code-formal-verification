@@ -9,7 +9,8 @@ from src.pipelines.base import PipelineBase
 from src.types.project import ProjectStructure
 # from src.prove.api_theorem_prover import APITheoremProver
 from src.prove.api_theorem_prover_v2 import APITheoremProver
-from src.prove.table_theorem_prover import TableTheoremProver
+# from src.prove.table_theorem_prover import TableTheoremProver
+from src.prove.table_theorem_prover_v2 import TableTheoremProver
 from src.prove.api_negative_theorem_generator import APINegativeTheoremGenerator
 from src.prove.table_negative_theorem_generator import TableNegativeTheoremGenerator
 
@@ -17,9 +18,9 @@ class ProveState(Enum):
     """Prove pipeline states"""
     INIT = 0
     API_THEOREMS = 1
-    API_NEGATIVE_GENERATION = 2
-    API_NEGATIVE_THEOREMS = 3
-    TABLE_THEOREMS = 4
+    TABLE_THEOREMS = 2
+    API_NEGATIVE_GENERATION = 3
+    API_NEGATIVE_THEOREMS = 4
     TABLE_NEGATIVE_GENERATION = 5
     TABLE_NEGATIVE_THEOREMS = 6
     COMPLETED = 7
@@ -43,6 +44,7 @@ class ProvePipeline(PipelineBase):
                  theorem_output_path: str,
                  output_base_path: str,
                  model: str = "qwen-max-latest",
+                 prover_model: Optional[str] = None,
                  max_theorem_retries: int = 3,
                  max_examples: int = 5,
                  max_global_attempts: int = 3,
@@ -62,7 +64,8 @@ class ProvePipeline(PipelineBase):
         )
         
         self.theorem_output_path = theorem_output_path
-        self.model = model
+        self.generator_model = model
+        self.prover_model = prover_model if prover_model else model
         self.max_theorem_retries = max_theorem_retries
         self.max_examples = max_examples
         self.max_global_attempts = max_global_attempts
@@ -88,6 +91,8 @@ class ProvePipeline(PipelineBase):
     async def run(self) -> bool:
         """Run the complete prove pipeline"""
         self.logger.info(f"Starting prove pipeline for project: {self.project_name}")
+        self.logger.info(f"Using generator model: {self.generator_model}")
+        self.logger.info(f"Using prover model: {self.prover_model}")
         
         # Determine starting state
         start_state = self.validate_continuation()
@@ -112,7 +117,7 @@ class ProvePipeline(PipelineBase):
                 project = ProjectStructure.from_dict(self.load_output(ProveState.INIT))
             
             prover = APITheoremProver(
-                model=self.model,
+                model=self.prover_model,
                 max_retries=self.max_theorem_retries,
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
@@ -121,15 +126,32 @@ class ProvePipeline(PipelineBase):
             self.save_output(ProveState.API_THEOREMS, project.to_dict())
             self.logger.info("API theorems proved")
 
-        # Generate API negative theorems
-        if start_state <= ProveState.API_NEGATIVE_GENERATION:
-            self.save_state(ProveState.API_NEGATIVE_GENERATION)
-            self.logger.info("3. Generating API negative theorems...")
+        # Prove table theorems
+        if start_state <= ProveState.TABLE_THEOREMS:
+            self.save_state(ProveState.TABLE_THEOREMS)
+            self.logger.info("3. Proving table theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.API_THEOREMS))
             
+            prover = TableTheoremProver(
+                model=self.prover_model,
+                max_retries=self.max_theorem_retries,
+                max_examples=self.max_examples,
+                max_global_attempts=self.max_global_attempts
+            )
+            project = await prover.prove(project, negative=False, logger=self.logger)
+            self.save_output(ProveState.TABLE_THEOREMS, project.to_dict())
+            self.logger.info("Table theorems proved")
+
+        # Generate API negative theorems
+        if start_state <= ProveState.API_NEGATIVE_GENERATION:
+            self.save_state(ProveState.API_NEGATIVE_GENERATION)
+            self.logger.info("4. Generating API negative theorems...")
+            if not project:
+                project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_THEOREMS))
+            
             generator = APINegativeTheoremGenerator(
-                model=self.model,
+                model=self.generator_model,
                 max_retries=self.max_theorem_retries
             )
             project = await generator.generate(project, logger=self.logger)
@@ -139,12 +161,12 @@ class ProvePipeline(PipelineBase):
         # Prove API negative theorems
         if start_state <= ProveState.API_NEGATIVE_THEOREMS:
             self.save_state(ProveState.API_NEGATIVE_THEOREMS)
-            self.logger.info("4. Proving API negative theorems...")
+            self.logger.info("5. Proving API negative theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.API_NEGATIVE_GENERATION))
             
             prover = APITheoremProver(
-                model=self.model,
+                model=self.prover_model,
                 max_retries=self.max_theorem_retries,
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
@@ -153,32 +175,15 @@ class ProvePipeline(PipelineBase):
             self.save_output(ProveState.API_NEGATIVE_THEOREMS, project.to_dict())
             self.logger.info("API negative theorems proved")
 
-        # Prove table theorems
-        if start_state <= ProveState.TABLE_THEOREMS:
-            self.save_state(ProveState.TABLE_THEOREMS)
-            self.logger.info("5. Proving table theorems...")
-            if not project:
-                project = ProjectStructure.from_dict(self.load_output(ProveState.API_NEGATIVE_THEOREMS))
-            
-            prover = TableTheoremProver(
-                model=self.model,
-                max_retries=self.max_theorem_retries,
-                max_examples=self.max_examples,
-                max_global_attempts=self.max_global_attempts
-            )
-            project = await prover.prove(project, negative=False, logger=self.logger)
-            self.save_output(ProveState.TABLE_THEOREMS, project.to_dict())
-            self.logger.info("Table theorems proved")
-
         # Generate table negative theorems
         if start_state <= ProveState.TABLE_NEGATIVE_GENERATION:
             self.save_state(ProveState.TABLE_NEGATIVE_GENERATION)
             self.logger.info("6. Generating table negative theorems...")
             if not project:
-                project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_THEOREMS))
+                project = ProjectStructure.from_dict(self.load_output(ProveState.API_NEGATIVE_THEOREMS))
             
             generator = TableNegativeTheoremGenerator(
-                model=self.model,
+                model=self.generator_model,
                 max_retries=self.max_theorem_retries
             )
             project = await generator.generate(project, logger=self.logger)
@@ -193,7 +198,7 @@ class ProvePipeline(PipelineBase):
                 project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_NEGATIVE_GENERATION))
             
             prover = TableTheoremProver(
-                model=self.model,
+                model=self.prover_model,
                 max_retries=self.max_theorem_retries,
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
@@ -225,7 +230,9 @@ def main():
     
     # Model settings
     parser.add_argument("--model", default="qwen-max-latest",
-                      help="Model to use for proving")
+                      help="Model to use for theorem generation")
+    parser.add_argument("--prover-model", default=None,
+                      help="Model to use for theorem proving (default: same as --model)")
     parser.add_argument("--max-theorem-retries", type=int, default=3,
                       help="Maximum retries for each theorem")
     parser.add_argument("--max-examples", type=int, default=5,
@@ -261,6 +268,7 @@ def main():
         theorem_output_path=args.theorem_output_path,
         output_base_path=args.output_base_path,
         model=args.model,
+        prover_model=args.prover_model,
         max_theorem_retries=args.max_theorem_retries,
         max_examples=args.max_examples,
         max_global_attempts=args.max_global_attempts,

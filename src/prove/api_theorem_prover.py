@@ -94,8 +94,10 @@ theorem userLoginSuccessWhenCredentialsMatch
     new_user_table = old_user_table := by
   -- Unfold the definition of userLogin to analyze its structure
   unfold userLogin
+  
   -- Simplify the first conditional check using the hypothesis h_user_exists
   simp [h_user_exists]
+  
   -- Split the proof based on the result of getStoredPassword
   cases h : getStoredPassword phoneNumber old_user_table with
   | none =>
@@ -104,8 +106,10 @@ theorem userLoginSuccessWhenCredentialsMatch
   | some storedPassword =>
     -- Simplify using the hypothesis h_unique_password to establish storedPassword = password
     simp_all
+    
     -- Unfold validatePassword to inspect its definition
     unfold validatePassword
+    
     -- Simplify the if-then-else expression using the equality of passwords
     simp [h_unique_password]
 ```

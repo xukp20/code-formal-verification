@@ -15,12 +15,14 @@ export PACKAGE_PATH=".cache/packages"
 mkdir -p outputs
 mkdir -p lean_project
 
-# model="qwen-max-latest"
+model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
-model="deepseek-r1"
+# model="deepseek-r1"
 # model="qwq-32b"
+
+prover_model="deepseek-r1"
 
 add_mathlib=true
 
@@ -40,13 +42,15 @@ log_level="DEBUG"
 task="prove"
 
 max_theorem_retries=5
-max_global_attempts=3
+max_global_attempts=4
 max_examples=3
 
 # continue=true
 # start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
 # start_state="TABLE_THEOREMS"
+# start_state="API_NEGATIVE_GENERATION"
+# start_state="API_NEGATIVE_THEOREMS"
 
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \
@@ -78,6 +82,7 @@ elif [ "$task" == "prove" ]; then
 --log-level $log_level \
 --log-model-io \
 --model $model \
+--prover-model $prover_model \
 --max-theorem-retries $max_theorem_retries \
 --max-global-attempts $max_global_attempts \
 --max-examples $max_examples"

@@ -31,9 +31,39 @@ File Structure Requirements:
    - Maintain type correctness and Lean 4 syntax
 
 3. Common Conversion Patterns:
-   - Add direct negation: ¬(original_statement)
-   - Show contradiction: original_statement → False
-   - Provide counterexample: ∃x, ¬P(x)
+   - **Negate the Original Statement**: Convert `∀ x, P(x) → Q(x)` to `∃ x, P(x) ∧ ¬Q(x)`.
+   - **Change Quantifiers**: Replace universal quantifiers (`∀`) with existential quantifiers (`∃`). Variables without quantifiers are also default to be `∀`.
+   - **Preserve Premises**: Keep premise conditions (e.g., `h_not_exists`) unchanged.
+   - **Negate the Conclusion**: Change the conclusion to its logical negation (e.g., `¬Q(x)`).
+   - **Maintain Structure**: Follow the original theorem's structure and Lean 4 syntax.
+   - In conclusion, if the original theorem is (x, y, z), (h1: P(x, y, z)) → Q(x, y, z), the negative theorem should be ∃ (x, y, z), (h1: P(x, y, z)) ∧ ¬Q(x, y, z)
+
+### Example Conversion
+
+#### Original Theorem:
+```lean
+theorem userLoginFailsWhenUserNotExists
+    (phoneNumber : String)
+    (password : String)
+    (old_user_table : UserTable)
+    (h_not_exists : ¬ old_user_table.rows.any (λ row => row.phone_number == phoneNumber)) :
+    let (result, new_user_table) := userLogin phoneNumber password old_user_table;
+    result = LoginResult.InvalidCredentials ∧
+    new_user_table = old_user_table := by
+  sorry
+```
+
+#### Negative Theorem:
+```lean
+theorem notUserLoginFailsWhenUserNotExists :
+    ∃ (phoneNumber : String) 
+    (password : String) 
+    (old_user_table : UserTable)
+    (h_not_exists : ¬ old_user_table.rows.any (λ row => row.phone_number == phoneNumber)),
+    let (result, new_user_table) := userLogin phoneNumber password old_user_table;
+    (result ≠ LoginResult.InvalidCredentials ∨ new_user_table ≠ old_user_table) := by
+  sorry
+```
 
 Return your response in three parts:
 ### Analysis

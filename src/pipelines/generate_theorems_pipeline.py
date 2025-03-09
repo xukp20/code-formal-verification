@@ -187,9 +187,9 @@ def main():
     # Model settings
     parser.add_argument("--model", default="qwen-max",
                       help="Model to use for analysis and formalization")
-    parser.add_argument("--api-theorem-retries", type=int, default=5,
+    parser.add_argument("--api-theorem-retries", type=int, default=8,
                       help="Maximum retries for API theorem formalizer")
-    parser.add_argument("--table-theorem-retries", type=int, default=5,
+    parser.add_argument("--table-theorem-retries", type=int, default=8,
                       help="Maximum retries for table theorem formalizer")
     
     # Logging settings

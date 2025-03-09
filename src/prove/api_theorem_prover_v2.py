@@ -198,7 +198,9 @@ Hints:
 Here are some examples of how to write proofs:
 {static_examples}
 
-Please make sure you have '### Output\n```json' in your response.
+Please make sure the fields in the json output are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 
 Please fix the proof.
 """
@@ -216,18 +218,23 @@ theorem userLoginSuccessWhenCredentialsMatch
     new_user_table = old_user_table := by
   -- Unfold the definition of userLogin to analyze its structure
   unfold userLogin
+  
   -- Simplify the first conditional check using the hypothesis h_user_exists
   simp [h_user_exists]
+  
   -- Split the proof based on the result of getStoredPassword
   cases h : getStoredPassword phoneNumber old_user_table with
   | none =>
+    
     -- This case contradicts h_unique_password, so we use contradiction
     simp_all
   | some storedPassword =>
     -- Simplify using the hypothesis h_unique_password to establish storedPassword = password
     simp_all
+    
     -- Unfold validatePassword to inspect its definition
     unfold validatePassword
+    
     -- Simplify the if-then-else expression using the equality of passwords
     simp [h_unique_password]
 ```"""
@@ -259,6 +266,18 @@ theorem userLoginSuccessWhenCredentialsMatch
         # Randomly select n examples
         if len(proved_theorems) > n:
             return random.sample(proved_theorems, n)
+
+        # For negative theorems, if not enough proved theorems, then use positive theorems
+        if negative and len(proved_theorems) < n:
+            for service in project.services:
+                for api in service.apis:
+                    if api.theorems:
+                        for theorem in api.theorems:
+                            if theorem.theorem and theorem.theorem.theorem_proved:
+                                proved_theorems.append(theorem.theorem.generate_content())
+                                if len(proved_theorems) >= n:
+                                    return proved_theorems
+
         return proved_theorems
 
     def _format_dependencies(self, service: Service, api: APIFunction, project: ProjectStructure, 
@@ -420,8 +439,10 @@ theorem userLoginSuccessWhenCredentialsMatch
                 if logger:
                     logger.warning(f"Failed to find valid partial proof for {lean_file.theorem_proved}")
                 # restore the backup
-                project.restore_lean_file(lean_file)
-                return False
+                # project.restore_lean_file(lean_file)
+                # return False
+                unsolved_goals = "Unknown"
+                partial_proof = "None of the tactics worked"
             
             # Restore on failure
             project.restore_lean_file(lean_file)
