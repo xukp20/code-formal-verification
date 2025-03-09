@@ -46,13 +46,15 @@ Step-by-step reasoning of your conversion strategy
 
 ### Output
 ```json
-{
+{{
   "imports": "string of unchanged import statements",
   "helper_functions": "string of helper functions (modified if needed)",
   "comment": "/- Original statement was incorrect: <original comment> -/",
   "theorem_unproved": "string of negative theorem statement with sorry"
-}
-```"""
+}}
+```
+- If there is no helper functions in the given theorem file and you also don't need to modify it, just remove the "helper_functions" field from the output.
+"""
 
     RETRY_PROMPT = """
 Lean theorem file content created from your previous response:
@@ -106,9 +108,6 @@ Make sure you have "### Output\n```json" in your response so that I can find the
 {pos_lean_file.to_markdown()}
 """
 
-        if logger:
-            logger.model_input(f"Negative theorem generation prompt:\n{user_prompt}")
-            
         # Try conversion with retries
         history = []
         error_message = None
@@ -126,6 +125,9 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 lean_file=lean_file_content,
                 structure_template=structure_template
             ) if attempt > 0 else system_prompt + "\n\n" + user_prompt)
+                
+            if logger:
+                logger.model_input(f"Negative theorem generation prompt:\n{prompt}")
                 
             # Call LLM
             response = await _call_openai_completion_async(

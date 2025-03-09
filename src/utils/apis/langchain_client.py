@@ -63,12 +63,12 @@ async def _call_openai_completion_async(
         if user_prompt:
             messages.append({"role": "user", "content": user_prompt})
 
-        # Create ChatOpenAI instance with a timeout of 120 seconds
+        # Create ChatOpenAI instance with a timeout of 300 seconds
         client = ChatOpenAI(
             model=model,
             openai_api_base=base_url,
             openai_api_key=api_key,
-            timeout=120,  # Set timeout to 120 seconds
+            timeout=300,  # Set timeout to 300 seconds
             **kwargs
         )
 

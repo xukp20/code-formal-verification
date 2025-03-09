@@ -10,13 +10,19 @@ from src.types.project import ProjectStructure
 # from src.prove.api_theorem_prover import APITheoremProver
 from src.prove.api_theorem_prover_v2 import APITheoremProver
 from src.prove.table_theorem_prover import TableTheoremProver
+from src.prove.api_negative_theorem_generator import APINegativeTheoremGenerator
+from src.prove.table_negative_theorem_generator import TableNegativeTheoremGenerator
 
 class ProveState(Enum):
     """Prove pipeline states"""
     INIT = 0
     API_THEOREMS = 1
-    TABLE_THEOREMS = 2
-    COMPLETED = 3
+    API_NEGATIVE_GENERATION = 2
+    API_NEGATIVE_THEOREMS = 3
+    TABLE_THEOREMS = 4
+    TABLE_NEGATIVE_GENERATION = 5
+    TABLE_NEGATIVE_THEOREMS = 6
+    COMPLETED = 7
 
     def __le__(self, other):
         if not isinstance(other, ProveState):
@@ -111,16 +117,48 @@ class ProvePipeline(PipelineBase):
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
             )
-            project = await prover.prove(project, self.logger)
+            project = await prover.prove(project, negative=False, logger=self.logger)
             self.save_output(ProveState.API_THEOREMS, project.to_dict())
             self.logger.info("API theorems proved")
+
+        # Generate API negative theorems
+        if start_state <= ProveState.API_NEGATIVE_GENERATION:
+            self.save_state(ProveState.API_NEGATIVE_GENERATION)
+            self.logger.info("3. Generating API negative theorems...")
+            if not project:
+                project = ProjectStructure.from_dict(self.load_output(ProveState.API_THEOREMS))
+            
+            generator = APINegativeTheoremGenerator(
+                model=self.model,
+                max_retries=self.max_theorem_retries
+            )
+            project = await generator.generate(project, logger=self.logger)
+            self.save_output(ProveState.API_NEGATIVE_GENERATION, project.to_dict())
+            self.logger.info("API negative theorems generated")
+
+        # Prove API negative theorems
+        if start_state <= ProveState.API_NEGATIVE_THEOREMS:
+            self.save_state(ProveState.API_NEGATIVE_THEOREMS)
+            self.logger.info("4. Proving API negative theorems...")
+            if not project:
+                project = ProjectStructure.from_dict(self.load_output(ProveState.API_NEGATIVE_GENERATION))
+            
+            prover = APITheoremProver(
+                model=self.model,
+                max_retries=self.max_theorem_retries,
+                max_examples=self.max_examples,
+                max_global_attempts=self.max_global_attempts
+            )
+            project = await prover.prove(project, negative=True, logger=self.logger)
+            self.save_output(ProveState.API_NEGATIVE_THEOREMS, project.to_dict())
+            self.logger.info("API negative theorems proved")
 
         # Prove table theorems
         if start_state <= ProveState.TABLE_THEOREMS:
             self.save_state(ProveState.TABLE_THEOREMS)
-            self.logger.info("3. Proving table theorems...")
+            self.logger.info("5. Proving table theorems...")
             if not project:
-                project = ProjectStructure.from_dict(self.load_output(ProveState.API_THEOREMS))
+                project = ProjectStructure.from_dict(self.load_output(ProveState.API_NEGATIVE_THEOREMS))
             
             prover = TableTheoremProver(
                 model=self.model,
@@ -128,14 +166,45 @@ class ProvePipeline(PipelineBase):
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
             )
-            project = await prover.prove(project, self.logger)
+            project = await prover.prove(project, negative=False, logger=self.logger)
             self.save_output(ProveState.TABLE_THEOREMS, project.to_dict())
             self.logger.info("Table theorems proved")
 
-        self.save_state(ProveState.COMPLETED)
+        # Generate table negative theorems
+        if start_state <= ProveState.TABLE_NEGATIVE_GENERATION:
+            self.save_state(ProveState.TABLE_NEGATIVE_GENERATION)
+            self.logger.info("6. Generating table negative theorems...")
+            if not project:
+                project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_THEOREMS))
+            
+            generator = TableNegativeTheoremGenerator(
+                model=self.model,
+                max_retries=self.max_theorem_retries
+            )
+            project = await generator.generate(project, logger=self.logger)
+            self.save_output(ProveState.TABLE_NEGATIVE_GENERATION, project.to_dict())
+            self.logger.info("Table negative theorems generated")
 
+        # Prove table negative theorems
+        if start_state <= ProveState.TABLE_NEGATIVE_THEOREMS:
+            self.save_state(ProveState.TABLE_NEGATIVE_THEOREMS)
+            self.logger.info("7. Proving table negative theorems...")
+            if not project:
+                project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_NEGATIVE_GENERATION))
+            
+            prover = TableTheoremProver(
+                model=self.model,
+                max_retries=self.max_theorem_retries,
+                max_examples=self.max_examples,
+                max_global_attempts=self.max_global_attempts
+            )
+            project = await prover.prove(project, negative=True, logger=self.logger)
+            self.save_output(ProveState.TABLE_NEGATIVE_THEOREMS, project.to_dict())
+            self.logger.info("Table negative theorems proved")
+
+        self.save_state(ProveState.COMPLETED)
         if not project:
-            project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_THEOREMS))
+            project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_NEGATIVE_THEOREMS))
         self.save_output(ProveState.COMPLETED, project.to_dict())
 
         self.logger.info("Prove pipeline completed successfully")

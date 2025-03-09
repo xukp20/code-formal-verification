@@ -180,7 +180,7 @@ Please make sure you have '### Output\n```json' in your response."""
         self.max_examples = max_examples
         self.max_global_attempts = max_global_attempts
 
-    def _collect_examples(self, project: ProjectStructure, n: int) -> List[str]:
+    def _collect_examples(self, project: ProjectStructure, n: int, negative: bool = False) -> List[str]:
         """Collect n random proved table theorems as examples"""
         proved_theorems = []
         
@@ -190,8 +190,14 @@ Please make sure you have '### Output\n```json' in your response."""
                     for property in table.properties:
                         if property.theorems:
                             for theorem in property.theorems:
-                                if theorem.theorem and theorem.theorem.theorem_proved:
-                                    proved_theorems.append(theorem.theorem.generate_content())
+                                if negative:
+                                    # Collect proved negative theorems
+                                    if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                                        proved_theorems.append(theorem.theorem_negative.generate_content())
+                                else:
+                                    # Collect proved positive theorems
+                                    if theorem.theorem and theorem.theorem.theorem_proved:
+                                        proved_theorems.append(theorem.theorem.generate_content())
                         
         # Randomly select n examples
         if len(proved_theorems) > n:
@@ -244,15 +250,19 @@ Please make sure you have '### Output\n```json' in your response."""
                           theorem: TableTheorem,
                           theorem_id: int,
                           examples: List[str],
+                          negative: bool = False,
                           logger: Optional[Logger] = None) -> bool:
         """Prove a single table theorem"""
         if logger:
-            logger.info(f"Proving theorem {theorem_id} for table {table.name}")
+            theorem_type = "negative" if negative else "positive"
+            logger.info(f"Proving {theorem_type} theorem {theorem_id} for table {table.name}")
             
-        lean_file = theorem.theorem
+        # Select appropriate theorem file
+        lean_file = theorem.theorem_negative if negative else theorem.theorem
         if not lean_file:
             if logger:
                 logger.error(f"No theorem file found for table {table.name}")
+            return False
 
         api = project.get_api(service.name, theorem.api_name)
         if not api:
@@ -388,10 +398,12 @@ Please prove the given theorem.
 
     async def prove(self,
                    project: ProjectStructure,
+                   negative: bool = False,
                    logger: Optional[Logger] = None) -> ProjectStructure:
         """Prove all table theorems in the project"""
         if logger:
-            logger.info(f"Proving table theorems for project: {project.name}")
+            theorem_type = "negative" if negative else "positive"
+            logger.info(f"Proving table {theorem_type} theorems for project: {project.name}")
             
         for global_attempt in range(self.max_global_attempts):
             if logger:
@@ -407,11 +419,16 @@ Please prove the given theorem.
                         for property in table.properties:
                             if property.theorems:
                                 for id, theorem in enumerate(property.theorems):
-                                    if not theorem.theorem or theorem.theorem.theorem_proved:
-                                        continue
+                                    # Check appropriate theorem based on negative flag
+                                    if negative:
+                                        if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
+                                            continue
+                                    else:
+                                        if not theorem.theorem or theorem.theorem.theorem_proved:
+                                            continue
                                     
                                     # Collect fresh examples before each theorem attempt
-                                    examples = self._collect_examples(project, self.max_examples)
+                                    examples = self._collect_examples(project, self.max_examples, negative=negative)
                                     if logger:
                                         logger.info(f"Collected {len(examples)} proof examples for {table.name} theorem {id}")
                                     
@@ -422,13 +439,15 @@ Please prove the given theorem.
                                         theorem=theorem,
                                         theorem_id=id,
                                         examples=examples,
+                                        negative=negative,
                                         logger=logger
                                     )
                                     
                                     if not success:
                                         unproved_count += 1
                                         if logger:
-                                            logger.warning(f"Failed to prove theorem for table {table.name}")
+                                            theorem_type = "negative" if negative else "positive"
+                                            logger.warning(f"Failed to prove {theorem_type} theorem for table {table.name}")
                                 
             # Check if all theorems are proved
             if unproved_count == 0:

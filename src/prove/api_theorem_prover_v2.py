@@ -205,26 +205,31 @@ Please fix the proof.
 
     STATIC_EXAMPLES = """
 ```lean
-theorem user_login_success {phoneNumber : String} {password : String} 
-  (old_user_table : UserTable)
-  (h_user_exists : queryUserRecord phoneNumber old_user_table)
-  (h_password_matches : getStoredPassword phoneNumber old_user_table = some password)
-  (h_unique_record : ¬ hasMultipleRecords phoneNumber old_user_table) :
-  let (result, new_user_table) := performUserLogin phoneNumber password old_user_table;
-  result = LoginResult.Success "登录成功" ∧ new_user_table = old_user_table := 
-by
-  -- Step 1: Unfold the definition of performUserLogin
-  unfold performUserLogin
-
-  -- Step 2: Simplify the first if condition using h_user_exists
+theorem userLoginSuccessWhenCredentialsMatch
+    (phoneNumber : String)
+    (password : String)
+    (old_user_table : UserTable)
+    (h_user_exists : queryUserRecord phoneNumber old_user_table)
+    (h_unique_password : getStoredPassword phoneNumber old_user_table = some password) :
+    let (result, new_user_table) := userLogin phoneNumber password old_user_table;
+    result = LoginResult.Success ∧
+    new_user_table = old_user_table := by
+  -- Unfold the definition of userLogin to analyze its structure
+  unfold userLogin
+  -- Simplify the first conditional check using the hypothesis h_user_exists
   simp [h_user_exists]
-
-  -- Step 3: Analyze the password validation step
-  -- Unfold validatePassword to inspect its behavior
-  unfold validatePassword
-
-  -- Use h_password_matches to simplify the match expression
-  simp [h_password_matches]
+  -- Split the proof based on the result of getStoredPassword
+  cases h : getStoredPassword phoneNumber old_user_table with
+  | none =>
+    -- This case contradicts h_unique_password, so we use contradiction
+    simp_all
+  | some storedPassword =>
+    -- Simplify using the hypothesis h_unique_password to establish storedPassword = password
+    simp_all
+    -- Unfold validatePassword to inspect its definition
+    unfold validatePassword
+    -- Simplify the if-then-else expression using the equality of passwords
+    simp [h_unique_password]
 ```"""
 
     def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3, 
@@ -234,7 +239,7 @@ by
         self.max_examples = max_examples
         self.max_global_attempts = max_global_attempts
 
-    def _collect_examples(self, project: ProjectStructure, n: int) -> List[str]:
+    def _collect_examples(self, project: ProjectStructure, n: int, negative: bool = False) -> List[str]:
         """Collect n random proved theorems as examples"""
         proved_theorems = []
         
@@ -242,8 +247,14 @@ by
             for api in service.apis:
                 if api.theorems:
                     for theorem in api.theorems:
-                        if theorem.theorem and theorem.theorem.theorem_proved:
-                            proved_theorems.append(theorem.theorem.generate_content())
+                        if negative:
+                            # Collect proved negative theorems
+                            if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                                proved_theorems.append(theorem.theorem_negative.generate_content())
+                        else:
+                            # Collect proved positive theorems
+                            if theorem.theorem and theorem.theorem.theorem_proved:
+                                proved_theorems.append(theorem.theorem.generate_content())
                         
         # Randomly select n examples
         if len(proved_theorems) > n:
@@ -303,12 +314,15 @@ by
                           theorem: APITheorem,
                           theorem_id: int,
                           examples: List[LeanTheoremFile],
+                          negative: bool = False,
                           logger: Optional[Logger] = None) -> bool:
         """Prove a single API theorem"""
         if logger:
-            logger.info(f"Proving theorem {theorem_id} for API {api.name}")
+            theorem_type = "negative" if negative else "positive"
+            logger.info(f"Proving {theorem_type} theorem {theorem_id} for API {api.name}")
             
-        lean_file = theorem.theorem
+        # Select appropriate theorem file
+        lean_file = theorem.theorem_negative if negative else theorem.theorem
         if not lean_file:
             if logger:
                 logger.error(f"No theorem file found for API {api.name}")
@@ -416,10 +430,12 @@ by
 
     async def prove(self,
                    project: ProjectStructure,
+                   negative: bool = False,
                    logger: Optional[Logger] = None) -> ProjectStructure:
         """Prove all API theorems in the project"""
         if logger:
-            logger.info(f"Proving API theorems for project: {project.name}")
+            theorem_type = "negative" if negative else "positive"
+            logger.info(f"Proving API {theorem_type} theorems for project: {project.name}")
             
         for global_attempt in range(self.max_global_attempts):
             if logger:
@@ -438,11 +454,16 @@ by
                     continue
                 if api.theorems:
                     for id, theorem in enumerate(api.theorems):
-                        if not theorem.theorem or theorem.theorem.theorem_proved:
-                            continue
-                        
+                        # Check appropriate theorem based on negative flag
+                        if negative:
+                            if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
+                                continue
+                        else:
+                            if not theorem.theorem or theorem.theorem.theorem_proved:
+                                continue
+                            
                         # Collect fresh examples before each theorem attempt
-                        examples = self._collect_examples(project, self.max_examples)
+                        examples = self._collect_examples(project, self.max_examples, negative=negative)
                         if logger:
                             logger.info(f"Collected {len(examples)} proof examples for {api.name} theorem {id}")
                         
@@ -453,13 +474,15 @@ by
                             theorem=theorem,
                             theorem_id=id,
                             examples=examples,
+                            negative=negative,
                             logger=logger
                         )
                         
                         if not success:
                             unproved_count += 1
                             if logger:
-                                logger.warning(f"Failed to prove theorem for API: {api.name}")
+                                theorem_type = "negative" if negative else "positive"
+                                logger.warning(f"Failed to prove {theorem_type} theorem for API: {api.name}")
                                 
             # Check if all theorems are proved
             if unproved_count == 0:
