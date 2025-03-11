@@ -48,7 +48,7 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - ! Keep the helper functions easy:
      - For the helper functions, if they don't change the table, you should not input and output the table parameters.
      - Only make sure every API has the related tables as parameters and return the updated tables as outputs.
-   - Note that we need to check the correctness of the API, by examining both the output and the new table status, so you MUST NOT ignore any updated table by assuming it is not changed.
+   - Note that we need to check the correctness of the API, by examining both the output and the new table status, so in the current API and its helper functions, you MUST NOT ignore any updated table by assuming it is not changed.
    - You should always take the updated tables from a helper function that uses the table or a dependent API to use it for the future operations until return it as the part of the return value.
 
 3. API dependencies:
@@ -58,6 +58,18 @@ Convert the given API implementation into Lean 4 code following these requiremen
         - For example, the current API A use table X, and calls API B that use table Y, you should import and open both X and Y, and A is defined with two table parameters like (old_x_table: XTable, old_y_table: YTable), and you should return the updated tables as outputs.
     - If the required table of the dependent API is already formalized as a input/output pair, just use that for the input parameter and remember to update the table after the dependent API call.
    - Check the return type of the dependent API, to handle each part and each situation correctly.
+   - *Possible simplification*: Since we are trying to formalize the current API instead of the dependent API, you are allowed to simplify the call to APIs that are read-only, by ignoring the returned tables from the dependent API and use the old table for the future operations.
+    - This can only be used when you are sure the dependent API is read-only, which means it doesn't change any tables.
+    - If so, you can write the function call like this:
+        ```lean
+        let (result, _) := queryXXX(params, old_x_table);
+        -- Use the old_x_table for the future operations
+        ```
+        instead of:
+        ```lean
+        let (result, new_x_table) := queryXXX(params, old_x_table);
+        -- Use the new_x_table for the future operations
+        ```
 
 4. Outcome Types:
    - Use explicit inductive types for outcomes
@@ -72,8 +84,8 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - Use these types to represent success/failure states
    - Please distinguish different types of returns, including the response type and the message string to define each of them as a different result type
    - We don't keep the raw string in the result type, just use types to represent different results
-   - Handle all error cases without panic!
-   - Return values directly without IO
+   - *Important*: The exceptions raised in the code is just a type of the API response, so you should never use panic! to handle them, instead you should use the result type to represent the different results
+   - Return values directly without IO wrapper
 
 5. Return Types:
    - The final return type of the function should be the outcome type together with all the tables that are input in the function signature

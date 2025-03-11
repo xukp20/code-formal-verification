@@ -6,13 +6,14 @@ from logging import Logger
 
 from src.types.project import ProjectStructure
 
-def init_project(project_name: str, base_path: str, lean_base_path: str) -> Tuple[bool, str, ProjectStructure]:
+def init_project(project_name: str, base_path: str, lean_base_path: str, add_mathlib: bool = False) -> Tuple[bool, str, ProjectStructure]:
     """Initialize project structure and Lean repository
     
     Args:
         project_name: Name of the project
         base_path: Path to source code repository
         lean_base_path: Path to create Lean project
+        add_mathlib: Whether to add mathlib to the Lean project
         
     Returns:
         (success, message, project_structure)
@@ -31,7 +32,7 @@ def init_project(project_name: str, base_path: str, lean_base_path: str) -> Tupl
         return False, message, project
         
     # Initialize Lean repository
-    success, message = project.init_lean_repository()
+    success, message = project.init_lean_repository(add_mathlib=add_mathlib)
     if not success:
         return False, message, project
         

@@ -843,14 +843,14 @@ class ProjectStructure:
         except Exception as e:
             return False, f"Failed to load source repository: {str(e)}"
 
-    def init_lean_repository(self, logger: Logger=None) -> Tuple[bool, str]:
+    def init_lean_repository(self, add_mathlib: bool = False, logger: Logger=None) -> Tuple[bool, str]:
         """Initialize Lean repository structure"""
         try:
             # Initialize project using manager
             success, message = LeanProjectManager.init_project(
                 self.lean_project_path.parent,
                 self.lean_project_name,
-                with_mathlib=True
+                add_mathlib=add_mathlib
             )
             if not success and logger:
                 logger.warning(f"Failed to initialize Lean repository: {message}")

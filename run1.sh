@@ -24,7 +24,7 @@ model="qwen-max-latest"
 
 prover_model="deepseek-r1"
 
-add_mathlib=true
+add_mathlib=false
 
 
 # project_name="UserAuthenticationProject11"
@@ -37,8 +37,8 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-# task="formalize"
-task="theorem_generate"
+task="formalize"
+# task="theorem_generate"
 # task="prove"
 
 max_theorem_retries=5

@@ -112,13 +112,13 @@ lean_lib «{name}» {{
         
 
     @staticmethod
-    def init_project(lean_base_path: Path, project_name: str, with_mathlib: bool = True) -> Tuple[bool, str]:
+    def init_project(lean_base_path: Path, project_name: str, add_mathlib: bool = False) -> Tuple[bool, str]:
         """Initialize new Lean project
         
         Args:
             lean_base_path: Base directory for all Lean projects
             project_name: Name of the Lean project
-            with_mathlib: Whether to include mathlib
+            add_mathlib: Whether to include mathlib
             
         Returns:
             (success, message)
@@ -147,12 +147,13 @@ lean_lib «{name}» {{
             
             # Update lakefile
             lakefile_path = project_path / "lakefile.lean"
-            template = (LeanProjectManager.LAKEFILE_TEMPLATE_WITH_MATHLIB if with_mathlib 
+            template = (LeanProjectManager.LAKEFILE_TEMPLATE_WITH_MATHLIB if add_mathlib 
                       else LeanProjectManager.LAKEFILE_TEMPLATE)
             lakefile_path.write_text(template.format(name=project_name))
             
             # Copy package
-            LeanProjectManager._try_copy_package(project_path)
+            if add_mathlib:
+                LeanProjectManager._try_copy_package(project_path)
 
             # Run lake update
             success, message = LeanProjectManager._run_lake_update(project_path)
