@@ -66,6 +66,9 @@ File Structure Requirements:
     - If the property has constraints on the input params, you may consider directly provide the response of the dependent APIs (those called in the API) of the current API as the premise of the theorem
         - For example, if the property says `if the user and password is valid` and the current API depends on a `checkValid` API, you can directly write one of the hypothesis as `h_checkValid : checkValid user password = <some success type from that API>`
         - By doing this, we can separate the correctness of the current API from the correctness of the dependent APIs, and we can prove the current API's correctness by assuming the correctness of the dependent APIs
+   - If the output state involved table changes: 
+     - Explain it as the addition, deletion, modification or existence of specific records in the table, or the difference between the original table state and the new table state.
+     - Try not use check all the records of the table one by one, if you have to, make sure the order of the records is the same as the returned table of the API
    - Use 'sorry' for proof
    - The theorem should be structured that each parameter, hypothesis, and conclusion should be clearly defined.
    - Example:
@@ -132,15 +135,38 @@ Make sure you have "### Output\n```json" in your response."""
         self.max_retries = max_retries
 
     @staticmethod
-    def _format_dependencies(table: Table, api: APIFunction, project: ProjectStructure) -> str:
+    def _format_dependencies(service: Service, table: Table, api: APIFunction, project: ProjectStructure) -> str:
         """Format table and API dependencies as markdown"""
         sections = []
         
         # Add table definition
+        sections.append(f"# Current Table")
         sections.append(table.to_markdown(show_fields={"lean_structure": True}))
         
         # Add API implementation
+        sections.append(f"# Current API")
         sections.append(api.to_markdown(show_fields={"lean_function": True}))
+        
+        # Add API's dependent APIs
+        if api.dependencies.apis:
+            sections.append("\n# Dependent APIs of the current API")
+            for dep_service_name, dep_api_name in api.dependencies.apis:
+                dep_api = project.get_api(dep_service_name, dep_api_name)
+                if dep_api:
+                    sections.extend([
+                        f"\n## {dep_service_name}.{dep_api_name}",
+                        dep_api.to_markdown(show_fields={"lean_function": True, "doc": True})
+                    ])
+        
+        # Add API's dependent tables
+        if api.dependencies.tables:
+            sections.append("\n# Dependent Tables of the current API")
+            for table_name in api.dependencies.tables:
+                dep_table = project.get_table(service.name, table_name)
+                if dep_table and dep_table.name != table.name:
+                    sections.extend([
+                        dep_table.to_markdown(show_fields={"lean_structure": True})
+                    ])
         
         return "\n".join(sections)
 
@@ -162,7 +188,7 @@ Make sure you have "### Output\n```json" in your response."""
         lean_file = project.init_table_theorem(service.name, table.name, property_id, theorem_id)
             
         # Format dependencies
-        dependencies = self._format_dependencies(table, dep_api, project)
+        dependencies = self._format_dependencies(service, table, dep_api, project)
         
         # Prepare prompts
         structure_template = LeanTheoremFile.get_structure(proved=False)
@@ -172,7 +198,6 @@ Table: {table.name}
 API: {dep_api.name}
 Property: {property.description}
 
-# Dependencies
 {dependencies}"""
 
         if logger:

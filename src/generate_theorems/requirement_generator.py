@@ -24,7 +24,7 @@ Given an API's documentation, generate a list of specific, testable requirements
 4. Specify input/output relationships
 5. Specify the relationship between the input params and the input table state. Like the input matches any record in the table or not.
 6. Or, specify the relationship between the input params and response of dependent APIs given that input params. Like the dependent api will return success type given the input params.
-7. Define database state changes between the original table state and the new table state after the API is called. Explain it by explaining the addition, deletion, modification or existence of records in the table, or the difference between the original table state and the new table state.
+7. Define database state changes between the original table state and the new table state after the API is called. Explain it as the addition, deletion, modification or existence of specific records in the table, or the difference between the original table state and the new table state.
 
 To be specific, in the input part, we may explain:
 1. Input param requirements

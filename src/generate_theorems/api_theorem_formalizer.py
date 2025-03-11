@@ -70,6 +70,9 @@ File Structure Requirements:
     - By doing this, we can separate the correctness of the current API from the correctness of the dependent APIs, and we can prove the current API's correctness by assuming the correctness of the dependent APIs
    - If the responses of the dependent APIs are directly provided in the requirement, you MUST use them as the premise of the theorem, instead of breaking them down into lower level hypotheses
     - For example, if the requirement says `if the user and password is valid` and the current API calls a `checkValid` API to implement the logic. If `valid` actually means this record is in the table, which is also what the `checkValid` API does, you must use the response of the `checkValid` API as the premise of the theorem, instead of writing a hypothesis like `h_record_in_table : table.rows.any (fun row => row.phone_number == phoneNumber ∧ row.password = password)`, because the `checkValid` API is what we trust to be correct
+   - If the output state involved table changes: 
+     - Explain it as the addition, deletion, modification or existence of specific records in the table, or the difference between the original table state and the new table state.
+     - Try not use check all the records of the table one by one, if you have to, make sure the order of the records is the same as the returned table of the API
    - Use 'sorry' for the proof
    - The theorem should be structured that each parameter, hypothesis, and conclusion should be clearly defined.
    - Example:
@@ -170,7 +173,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 if dep_api:
                     lines.extend([
                         f"\n## {dep_service_name}.{dep_api_name}",
-                        dep_api.to_markdown(show_fields={"lean_function": True})
+                        dep_api.to_markdown(show_fields={"lean_function": True, "doc": True})
                     ])
                     
         # Format table dependencies
