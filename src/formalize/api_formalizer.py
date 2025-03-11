@@ -225,6 +225,32 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         ]
         return "\n".join(parts)
 
+    def _post_process_response(self, fields: Dict[str, str], logger: Optional[Logger] = None) -> Optional[str]:
+        """Check for illegal content in the response
+        
+        Args:
+            fields: Parsed fields from LLM response
+            logger: Optional logger
+            
+        Returns:
+            Error message if illegal content found, None otherwise
+        """
+        # Check helper functions for panic!
+        if "helper_functions" in fields:
+            if "panic!" in fields["helper_functions"].lower():
+                if logger:
+                    logger.warning("Found panic! in helper functions")
+                return "panic! is not allowed in helper functions. Please handle errors using result types instead."
+                
+        # Check main function for panic!
+        if "function" in fields:
+            if "panic!" in fields["function"].lower():
+                if logger:
+                    logger.warning("Found panic! in main function")
+                return "panic! is not allowed in function body. Please handle errors using result types instead."
+                
+        return None
+
     async def formalize_api(self, project: ProjectStructure, service: Service, 
                            api: APIFunction, table_deps: List[str], 
                            api_deps: List[Tuple[str, str]], 
@@ -273,6 +299,11 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 history=history,
                 temperature=0.0
             )
+
+            history.extend([
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": response if response else "Failed to get LLM response"}
+            ])
             
             if logger:
                 logger.model_output(f"LLM response:\n{response}")
@@ -295,6 +326,13 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 project.restore_lean_file(lean_file)
                 continue
 
+            # Post-process response
+            error_message = self._post_process_response(fields, logger)
+            if error_message:
+                if logger:
+                    logger.warning(f"Post-processing failed: {error_message}")
+                project.restore_lean_file(lean_file)
+                continue
             
             # Update Lean file
             project.update_lean_file(lean_file, fields)
@@ -309,10 +347,6 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 
             # Restore on failure
             project.restore_lean_file(lean_file)
-            history.extend([
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response}
-            ])
             
                 
         # Clean up on failure

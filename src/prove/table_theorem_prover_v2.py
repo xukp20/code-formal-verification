@@ -153,7 +153,11 @@ Hints:
 Here are some examples of how to write proofs:
 {static_examples}
 
+{last_post_process_error}
+
 Please make sure the fields in the json output are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
+
+You are not allowed to change the theorem statement, only add proof. Please make sure the theorem part is exactly the same as the theorem part in the input theorem file, and I will check it for validation.
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 
@@ -194,8 +198,11 @@ Hints:
 Here are some examples of how to write proofs:
 {static_examples}
 
+{last_post_process_error}
+
 Please make sure the fields in the json output are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
 
+You are not allowed to change the theorem statement, only add proof. Please make sure the theorem part is exactly the same as the theorem part in the input theorem file, and I will check it for validation.
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 
 Please fix the proof.
@@ -315,6 +322,39 @@ theorem userLoginPreservesUniquePhoneNumbers
         
         return "\n".join(lines)
     
+    def _post_process_response(self, fields: Dict[str, str], lean_file: LeanTheoremFile, logger: Optional[Logger] = None) -> Optional[str]:
+        """Check for illegal content in the response
+        
+        Args:
+            fields: Parsed fields from LLM response
+            lean_file: Original theorem file to check against
+            logger: Optional logger
+            
+        Returns:
+            Error message if illegal content found, None otherwise
+        """
+        # Check for sorry in proved theorem
+        if "theorem_proved" in fields:
+            if "sorry" in fields["theorem_proved"].lower():
+                if logger:
+                    logger.warning("Found sorry in proved theorem")
+                return "Last round returned a theorem proof with sorry inside. Please complete the proof without using sorry."
+
+        # Check theorem statement matches
+        if "theorem_proved" in fields and lean_file.theorem_unproved:
+            # Extract theorem statement (everything before :=)
+            original_stmt = lean_file.theorem_unproved.split(":=")[0].strip()
+            proved_stmt = fields["theorem_proved"].split(":=")[0].strip()
+            
+            if original_stmt != proved_stmt:
+                if logger:
+                    logger.warning("Theorem statement mismatch")
+                    logger.debug(f"Original: {original_stmt}")
+                    logger.debug(f"Proved: {proved_stmt}")
+                return "Last round modified the theorem statement. Please keep the original theorem statement exactly the same and only add the proof."
+                
+        return None
+
     async def prove_theorem(self,
                           project: ProjectStructure,
                           service: Service,
@@ -358,6 +398,7 @@ theorem userLoginPreservesUniquePhoneNumbers
         error_message = None
         partial_proof = None
         unsolved_goals = None
+        last_post_process_error = ""  # Initialize post process error message
 
         for attempt in range(self.max_retries):
             if logger:
@@ -378,7 +419,8 @@ theorem userLoginPreservesUniquePhoneNumbers
                     error=error_message,
                     partial_proof=partial_proof if partial_proof else "",
                     unsolved_goals=unsolved_goals if unsolved_goals else "",
-                    static_examples=self.STATIC_EXAMPLES
+                    static_examples=self.STATIC_EXAMPLES,
+                    last_post_process_error=last_post_process_error  # Add error message to prompt
                 )
                 
             if logger:
@@ -409,9 +451,20 @@ theorem userLoginPreservesUniquePhoneNumbers
                 if logger:
                     logger.error(f"Failed to process response: {e}")
                 error_message = str(e)
-                # restore the backup
+                last_post_process_error = ""  # Reset post process error
                 project.restore_lean_file(lean_file)
                 continue
+
+            # Post-process response
+            post_process_error = self._post_process_response(fields, lean_file, logger)
+            if post_process_error:
+                if logger:
+                    logger.warning(f"Post-processing failed: {post_process_error}")
+                last_post_process_error = post_process_error  # Set error message for next attempt
+                project.restore_lean_file(lean_file)
+                continue
+
+            last_post_process_error = ""  # Reset post process error if no issues found
 
             # Update theorem file
             project.update_lean_file(lean_file, fields)

@@ -164,6 +164,11 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 history=history,
                 temperature=0.0
             )
+
+            history.extend([
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": response if response else "Failed to get LLM response"}
+            ])
             
             if logger:
                 logger.model_output(f"LLM response:\n{response}")
@@ -200,10 +205,6 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 
             # Restore on failure
             project.restore_lean_file(lean_file)
-            history.extend([
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response}
-            ])
                 
         # Clean up on failure
         project.delete_table_structure(service.name, table.name)

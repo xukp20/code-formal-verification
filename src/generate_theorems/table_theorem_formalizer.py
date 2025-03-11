@@ -234,6 +234,11 @@ Property: {property.description}
                 temperature=0.0
             )
             
+            history.extend([
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": response if response else "Failed to get LLM response"}
+            ])
+
             if logger:
                 logger.model_output(f"Theorem formalization response:\n{response}")
                 
@@ -259,7 +264,7 @@ Property: {property.description}
             project.update_lean_file(lean_file, fields)
             
             # Try compilation
-            success, error = project.build(parse=True, add_context=True, only_errors=True)
+            success, error_message = project.build(parse=True, add_context=True, only_errors=True)
             lean_file_content = lean_file.to_markdown()
             
             if success:
@@ -269,11 +274,6 @@ Property: {property.description}
                     
             # Restore on failure
             project.restore_lean_file(lean_file)
-            error_message = error
-            history.extend([
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response}
-            ])
                 
         # Clean up on failure
         project.delete_table_theorem(service.name, table.name, property_id, theorem_id)

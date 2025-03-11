@@ -247,6 +247,7 @@ Service: {service.name}
                 
             if logger:
                 logger.model_input(f"Theorem formalization prompt:\n{prompt}")
+
             # Call LLM
             response = await _call_openai_completion_async(
                 model=self.model,
@@ -255,6 +256,11 @@ Service: {service.name}
                 history=history,
                 temperature=0.0
             )
+            
+            history.extend([
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": response if response else "Failed to get LLM response"}
+            ])
             
             if logger:
                 logger.model_output(f"Theorem formalization response:\n{response}")
@@ -286,10 +292,6 @@ Service: {service.name}
             # Restore on failure
             project.restore_lean_file(lean_file)
             error_message = error
-            history.extend([
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response}
-            ])
                 
         # Clean up on failure
         project.delete_api_theorem(service.name, api.name, theorem_id)
