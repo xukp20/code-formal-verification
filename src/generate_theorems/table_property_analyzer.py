@@ -12,7 +12,11 @@ class TablePropertyAnalyzer:
     ROLE_PROMPT = """You are a database property analyzer focusing on identifying invariants maintained by APIs. You excel at understanding how APIs affect database tables and identifying properties that remain true across operations."""
 
     SYSTEM_PROMPT = """Background:
-We need to identify what properties/invariants each database table maintains under different sets of APIs.
+
+We are working on a software project that has a few services, each service has a few APIs.
+We have already tested each API by generating specific, testable requirements for its input and output.
+
+Now we need to identify what properties/invariants each database table maintains under different sets of APIs.
 
 Task:
 Analyze the provided table and API information to:

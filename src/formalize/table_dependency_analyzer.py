@@ -26,12 +26,19 @@ Task:
    - Values are lists of table names that the key table depends on
    - Format: {"table_name": ["dependent_table1", "dependent_table2", ...]}
 
+### Output
+```json
+{{
+  "table_name": ["dependent_table1", "dependent_table2", ...]
+}}
+```
+
 Important:
 - Only include dependencies between tables within the same service
 - List all tables in the output, even if they have no dependencies
 - For tables with no dependencies, use an empty list []
 
-Wrap your JSON response with ```json and ``` markers."""
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
     def __init__(self, model: str = "qwen-max-latest"):
         self.model = model

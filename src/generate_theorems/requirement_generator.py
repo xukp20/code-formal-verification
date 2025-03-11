@@ -10,39 +10,51 @@ class RequirementGenerator:
     ROLE_PROMPT = """You are a software specification analyzer focusing on API verification. You excel at identifying and formalizing specific, testable requirements from API documentation."""
 
     SYSTEM_PROMPT = """Background:
-We need to verify API functionality by checking:
-Given:
-1. Input requirements
-2. Database state requirements
-Then what will be:
-1. The response
-2. The database update
+
+We are working on a software project that has a few services, each service has a few APIs.
+We want to test each API by generating specific, testable requirements for its input and output.
+For the APIs, they maybe call other APIs, so we need to consider the dependent API responses when generating requirements.
+In order to break the project and the services into separate APIs, when checking API A, we don't the functionality of its dependent APIs, so we just assume the dependent APIs work as expected and give the response of them as the premise.
 
 Task:
-Given an API's documentation, generate specific, testable requirements that:
+Given an API's documentation, generate a list of specific, testable requirements that:
 1. Follow from the documentation
 2. Cover all functionality
 3. Are clear and unambiguous
 4. Specify input/output relationships
-5. Define database state changes
+5. Specify the relationship between the input params and the input table state. Like the input matches any record in the table or not.
+6. Or, specify the relationship between the input params and response of dependent APIs given that input params. Like the dependent api will return success type given the input params.
+7. Define database state changes between the original table state and the new table state after the API is called. Explain it by explaining the addition, deletion, modification or existence of records in the table, or the difference between the original table state and the new table state.
+
+To be specific, in the input part, we may explain:
+1. Input param requirements
+2. Database state requirements, maybe related to the input params
+3. Dependent API responses given the input params if any dependent APIs are called
+
+The output part will be:
+1. The response of the API
+2. The database update or new attributes of the table
 
 Each requirement should explain:
 - Under what input conditions
 - With what database states
+- If any dependent APIs are called, what are the responses of the dependent APIs
 - The API must:
   * Return what response
   * Make what database changes
 
 Example requirements:
-- "If the user is not in the database, the register operation should succeed, return a success message, and add the user to the database"
-- "If the user exists, the register operation should fail, return an error message, and leave the database unchanged"
+- "If the user is not in the user table, the register operation should succeed, return a success message, and the user table should have the new user record"
+- "If the user exists in the user table, the register operation should fail, return an error message, and the user table should not be changed"
+- "If the user and the password pass the validation and return success, then this API should return the user info and the table should not be changed"
 
 Important:
 - Don't add requirements not in the documentation
 - Focus on functional behavior
 - Be specific about state changes
+- Always explicitly explain the responses of the dependent APIs if any, by providing the name of the API and the response type
 - Use clear English
-- Avoid implementation details
+- Avoid implementation details, just focus on the input/output relationship and the database state changes
 
 Return your analysis in two parts:
 ### Analysis

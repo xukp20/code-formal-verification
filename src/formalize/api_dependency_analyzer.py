@@ -36,7 +36,8 @@ Important:
 - APIs must exist in the provided API list
 - Return an empty array if no APIs are called
 - Order doesn't matter
-"""
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
     def __init__(self, model: str = "qwen-max-latest"):
         self.model = model
@@ -147,7 +148,7 @@ Important:
         
         # Extract JSON from response
         try:
-            json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()
+            json_str = response.split("```json")[-1].split("```")[0].strip()
             dependencies = json.loads(json_str)
         except Exception as e:
             raise ValueError(f"Failed to parse LLM response as JSON for API {api.name}: {e}")

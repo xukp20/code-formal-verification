@@ -63,6 +63,9 @@ File Structure Requirements:
    - Name should reflect the property for this API
    - Include necessary parameters
    - Specify pre and post conditions
+    - If the property has constraints on the input params, you may consider directly provide the response of the dependent APIs (those called in the API) of the current API as the premise of the theorem
+        - For example, if the property says `if the user and password is valid` and the current API depends on a `checkValid` API, you can directly write one of the hypothesis as `h_checkValid : checkValid user password = <some success type from that API>`
+        - By doing this, we can separate the correctness of the current API from the correctness of the dependent APIs, and we can prove the current API's correctness by assuming the correctness of the dependent APIs
    - Use 'sorry' for proof
    - The theorem should be structured that each parameter, hypothesis, and conclusion should be clearly defined.
    - Example:

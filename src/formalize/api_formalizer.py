@@ -75,16 +75,17 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - Use explicit inductive types for outcomes
    - Common patterns:
      ```lean
-     inductive OperationResult where
-       | Success : OperationResult
-       | NotFound : OperationResult
-       | Error : OperationResult
+     inductive <api_name>Result where
+       | Success : <api_name>Result
+       | NotFound : <api_name>Result
+       | Error : <api_name>Result
      ```
-   - Replace the OperationResult with a meaning result type
+   - Name the result type as <api_name>Result like UserLoginResult, BalanceQueryResult, etc.
    - Use these types to represent success/failure states
    - Please distinguish different types of returns, including the response type and the message string to define each of them as a different result type
    - We don't keep the raw string in the result type, just use types to represent different results
    - *Important*: The exceptions raised in the code is just a type of the API response, so you should never use panic! to handle them, instead you should use the result type to represent the different results
+   - Make sure you return the correct result type when error occurs, by checking that all the branches of the result type are covered.
    - Return values directly without IO wrapper
 
 5. Return Types:
@@ -115,6 +116,7 @@ Convert the given API implementation into Lean 4 code following these requiremen
 8. Function Naming
    - Try to use the same name as the original code
    - The main function of the API should be named as the API name, but following the Lean 4 naming convention, like `userLogin` or `balanceQuery` or `userRegister`
+   - Don't add `Message` or `Planner` in the function name, just the API name
 
    
 ## Output
@@ -140,7 +142,7 @@ Step-by-step reasoning of your formalization approach
 """
 
     RETRY_PROMPT = """
-Generate lean file:
+Generated Lean file:
 {lean_file}
     
 Compilation failed with error:
