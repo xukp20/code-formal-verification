@@ -153,8 +153,6 @@ Hints:
 Here are some examples of how to write proofs:
 {static_examples}
 
-{last_post_process_error}
-
 Please make sure the fields in the json output are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
 
 You are not allowed to change the theorem statement, only add proof. Please make sure the theorem part is exactly the same as the theorem part in the input theorem file, and I will check it for validation.
