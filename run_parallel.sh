@@ -27,9 +27,8 @@ prover_model="deepseek-r1"
 add_mathlib=false
 
 
-# project_name="UserAuthenticationProject11"
-# project_name="BankAccountv1"    # v1: error in authorization
-project_name="BankAccount"     # v0: correct
+project_name="UserAuthenticationProjectvp"
+# project_name="BankAccount8"
 
 project_base_path="source_code"
 lean_base_path="lean_project"
@@ -38,18 +37,22 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-# task="formalize"
-task="theorem_generate"
+task="formalize"
+# task="theorem_generate"
 # task="prove"
 
 max_theorem_retries=5
 max_global_attempts=4
 max_examples=3
 
+max_workers=2
+
 # continue=true
 # start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
 # start_state="TABLE_THEOREMS"
+# start_state="API_NEGATIVE_GENERATION"
+# start_state="API_NEGATIVE_THEOREMS"
 
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \
@@ -59,7 +62,8 @@ if [ "$task" == "formalize" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model"
+--model $model \
+--max-workers $max_workers"
 
     if [ "$add_mathlib" == "true" ]; then
         command="$command --add-mathlib"

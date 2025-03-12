@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 import json
 from logging import Logger
+import asyncio
 
 from src.types.project import ProjectStructure, Service, Table, APIFunction
 from src.types.lean_file import LeanFunctionFile
@@ -84,7 +85,9 @@ Convert the given API implementation into Lean 4 code following these requiremen
      ```
    - Name the result type as <api_name>Result like UserLoginResult, BalanceQueryResult, etc.
    - Use these types to represent success/failure states
-   - Please distinguish different types of returns, including the response type and the message string to define each of them as a different result type
+   - *Important*: Please distinguish different types of returns, including the response type and the message string to define each of them as a different result type
+    - Every different type and different message should be a different result type, so that we can distinguish them in the result type
+    - Don't just use a single Error type to represent all the errors, because we need to check if the error is expected or not too
    - We don't keep the raw string in the result type, just use types to represent different results
    - *Important*: The exceptions raised in the code is just a type of the API response, so you should never use panic! to handle them, instead you should use the result type to represent the different results
    - Make sure you return the correct result type when error occurs, by checking that all the branches of the result type are covered.
@@ -261,8 +264,11 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         if logger:
             logger.debug(f"Formalizing API: {service.name}.{api.name}")
             
-        # Initialize Lean file
+        # Initialize Lean file with lock
+        await project.acquire_lock()
         lean_file = project.init_api_function(service.name, api.name)
+        project.release_lock()
+        
         if not lean_file:
             if logger:
                 logger.error(f"Failed to initialize Lean file for {api.name}")
@@ -312,7 +318,9 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 
             if not response:
                 error_message = "Failed to get LLM response"
+                await project.acquire_lock()
                 project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
                 
             # Parse response
@@ -325,7 +333,9 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 if logger:
                     logger.error(f"Failed to parse LLM response: {e}")
                 error_message = str(e)
+                await project.acquire_lock()
                 project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
 
             # Post-process response
@@ -333,47 +343,130 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             if error_message:
                 if logger:
                     logger.warning(f"Post-processing failed: {error_message}")
+                await project.acquire_lock()
                 project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
             
-            # Update Lean file
-            project.update_lean_file(lean_file, fields)
-            
-            # Try compilation
-            success, error_message = project.build(parse=True, add_context=True, only_errors=True)
-            if success:
-                if logger:
-                    logger.debug(f"Successfully formalized API: {api.name}")
-                return True
-            lean_file_content = lean_file.to_markdown()
+            # Update and build with lock
+            await project.acquire_lock()
+            try:
+                # Update Lean file
+                project.update_lean_file(lean_file, fields)
                 
-            # Restore on failure
-            project.restore_lean_file(lean_file)
-            
-                
-        # Clean up on failure
+                # Try compilation
+                success, error_message = project.build(parse=True, add_context=True, only_errors=True)
+                if success:
+                    if logger:
+                        logger.debug(f"Successfully formalized API: {api.name}")
+                    project.release_lock()
+                    return True
+                    
+                lean_file_content = lean_file.to_markdown()
+                project.restore_lean_file(lean_file)
+            finally:
+                project.release_lock()
+
+        # Clean up on failure with lock
+        await project.acquire_lock()
         project.delete_api_function(service.name, api.name)
+        project.release_lock()
+        
         if logger:
             logger.error(f"Failed to formalize API {api.name} after {self.max_retries} attempts")
         return False
 
-    async def formalize(self, project: ProjectStructure, logger: Logger = None) -> ProjectStructure:
-        """Formalize all APIs in the project"""
+    async def _formalize_parallel(self, project: ProjectStructure, logger: Logger = None, max_workers: int = 1) -> ProjectStructure:
+        """Formalize APIs in parallel following dependency order"""
         if logger:
-            logger.info(f"Formalizing APIs for project: {project.name}")
+            logger.info(f"Formalizing APIs in parallel for project: {project.name}")
+
+        # Track API completion status
+        completed_apis = set()
+        pending_apis = {(service_name, api_name) for service_name, api_name in project.api_topological_order}
+        
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_api(service_name: str, api_name: str):
+            service = project.get_service(service_name)
+            api = project.get_api(service_name, api_name)
+            if not service or not api:
+                return False
+
+            # Get dependencies
+            table_deps = api.dependencies.tables
+            api_deps = api.dependencies.apis
+
+            success = await self.formalize_api(
+                project=project,
+                service=service,
+                api=api,
+                table_deps=table_deps,
+                api_deps=api_deps,
+                logger=logger
+            )
             
+            if success:
+                completed_apis.add((service_name, api_name))
+            return success
+
+        async def process_with_semaphore(service_name: str, api_name: str):
+            async with sem:
+                return await process_api(service_name, api_name)
+
+        while pending_apis:
+            # Find APIs whose dependencies are all completed
+            ready_apis = set()
+            for service_name, api_name in pending_apis:
+                api = project.get_api(service_name, api_name)
+                if not api:
+                    continue
+                    
+                deps_completed = all((dep_service, dep_api) in completed_apis 
+                                  for dep_service, dep_api in api.dependencies.apis)
+                if deps_completed:
+                    ready_apis.add((service_name, api_name))
+
+            if not ready_apis:
+                if logger:
+                    logger.warning("No APIs ready to process, possible circular dependency")
+                break
+
+            # Process ready APIs in parallel
+            tasks = [process_with_semaphore(service_name, api_name) 
+                    for service_name, api_name in ready_apis]
+            results = await asyncio.gather(*tasks)
+
+            # Update pending set
+            pending_apis -= ready_apis
+            
+            # Check for failures
+            if not all(results):
+                if logger:
+                    logger.error("Some APIs failed to formalize, stopping")
+                break
+
+        return project
+
+    async def formalize(self, project: ProjectStructure, logger: Logger = None, max_workers: int = 1) -> ProjectStructure:
+        """Formalize all APIs in the project"""
         if not project.api_topological_order:
             if logger:
                 logger.warning("No API topological order available, skipping formalization")
             return project
+
+        if max_workers > 1:
+            return await self._formalize_parallel(project, logger, max_workers)
             
-        # Process APIs in topological order
+        # Original sequential logic
+        if logger:
+            logger.info(f"Formalizing APIs for project: {project.name}")
+            
         for service_name, api_name in project.api_topological_order:
             service = project.get_service(service_name)
-            if not service:
-                continue
             api = project.get_api(service_name, api_name)
-            if not api:
+            if not service or not api:
                 continue
                 
             # Get dependencies

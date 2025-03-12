@@ -45,6 +45,7 @@ class FormalizationPipeline(PipelineBase):
                  model: str = "qwen-max-latest",
                  table_formalizer_retries: int = 3,
                  api_formalizer_retries: int = 5,
+                 max_workers: int = 1,
                  log_level: str = "INFO",
                  log_model_io: bool = False,
                  continue_from: bool = False,
@@ -66,6 +67,7 @@ class FormalizationPipeline(PipelineBase):
         self.model = model
         self.table_formalizer_retries = table_formalizer_retries
         self.api_formalizer_retries = api_formalizer_retries
+        self.max_workers = max_workers
         self.add_mathlib = add_mathlib
 
     @property
@@ -145,7 +147,7 @@ class FormalizationPipeline(PipelineBase):
                 project = ProjectStructure.from_dict(self.load_output(FormalizationState.TABLE_FORMALIZATION))
             
             analyzer = APITableDependencyAnalyzer(model=self.model)
-            project = await analyzer.analyze(project, self.logger)
+            project = await analyzer.analyze(project, self.logger, max_workers=self.max_workers)
             self.save_output(FormalizationState.API_TABLE_DEPENDENCY, project.to_dict())
             self.logger.info("API-table dependencies analyzed")
 
@@ -157,7 +159,7 @@ class FormalizationPipeline(PipelineBase):
                 project = ProjectStructure.from_dict(self.load_output(FormalizationState.API_TABLE_DEPENDENCY))
             
             analyzer = APIDependencyAnalyzer(model=self.model)
-            project = await analyzer.analyze(project, self.logger)
+            project = await analyzer.analyze(project, self.logger, max_workers=self.max_workers)
             self.save_output(FormalizationState.API_DEPENDENCY, project.to_dict())
             self.logger.info("API-API dependencies analyzed")
 
@@ -172,7 +174,7 @@ class FormalizationPipeline(PipelineBase):
                 model=self.model,
                 max_retries=self.api_formalizer_retries
             )
-            project = await formalizer.formalize(project, self.logger)
+            project = await formalizer.formalize(project, self.logger, max_workers=self.max_workers)
             self.save_output(FormalizationState.API_FORMALIZATION, project.to_dict())
             self.logger.info("APIs formalized")
 
@@ -225,6 +227,10 @@ def main():
     parser.add_argument("--add-mathlib", action="store_true",
                       help="Add mathlib to Lean project")
     
+    # Add max_workers argument
+    parser.add_argument("--max-workers", type=int, default=1,
+                      help="Maximum number of parallel workers")
+    
     args = parser.parse_args()
     
     if args.start_state and not args.continue_from:
@@ -238,6 +244,7 @@ def main():
         model=args.model,
         table_formalizer_retries=args.table_formalizer_retries,
         api_formalizer_retries=args.api_formalizer_retries,
+        max_workers=args.max_workers,
         log_level=args.log_level,
         log_model_io=args.log_model_io,
         continue_from=args.continue_from,

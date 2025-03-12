@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import json
 from collections import defaultdict, deque
 from logging import Logger
+import asyncio
 
 from src.types.project import ProjectStructure, Service, APIFunction
 from src.utils.apis.langchain_client import _call_openai_completion_async
@@ -158,8 +159,65 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         
         return dependencies
 
-    async def analyze(self, project: ProjectStructure, logger: Logger = None) -> ProjectStructure:
+    async def _analyze_parallel(self, project: ProjectStructure, logger: Logger = None, max_workers: int = 1) -> ProjectStructure:
+        """Analyze API dependencies in parallel"""
+        if logger:
+            logger.info(f"Analyzing API dependencies in parallel for project: {project.name} with {max_workers} workers")
+            
+        # Collect all dependencies
+        all_dependencies = {}
+        
+        # Create tasks for each API
+        tasks = []
+        for service in project.services:
+            if logger:
+                logger.info(f"Processing service: {service.name}")
+                
+            for api in service.apis:
+                tasks.append((project, service, api))
+
+        # Process APIs in parallel
+        async def process_api(task):
+            project, service, api = task
+            try:
+                dependencies = await self.analyze_api(project, service, api, logger)
+                api_key = f"{service.name}.{api.name}"
+                all_dependencies[api_key] = dependencies
+                api.dependencies.apis = dependencies
+                
+                if logger:
+                    logger.debug(f"API {api.name} depends on: {dependencies}")
+                    
+            except Exception as e:
+                if logger:
+                    logger.error(f"Failed to analyze API {api.name}: {e}")
+                raise
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_with_semaphore(task):
+            async with sem:
+                await process_api(task)
+
+        # Run all tasks
+        await asyncio.gather(*[process_with_semaphore(task) for task in tasks])
+        
+        # Compute topological order
+        project.api_topological_order = self._compute_topological_sort(all_dependencies)
+        
+        if not project.api_topological_order and all_dependencies:
+            if logger:
+                logger.warning("Could not compute valid topological sort, possible circular dependencies")
+                    
+        return project
+
+    async def analyze(self, project: ProjectStructure, logger: Logger = None, max_workers: int = 1) -> ProjectStructure:
         """Analyze API dependencies and compute topological order"""
+        if max_workers > 1:
+            return await self._analyze_parallel(project, logger, max_workers)
+            
+        # Original sequential logic
         if logger:
             logger.info(f"Analyzing API dependencies for project: {project.name}")
             

@@ -45,10 +45,10 @@ max_theorem_retries=5
 max_global_attempts=4
 max_examples=3
 
-# continue=true
+continue=true
 # start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
-# start_state="TABLE_THEOREMS"
+start_state="TABLE_THEOREMS"
 # start_state="API_NEGATIVE_GENERATION"
 # start_state="API_NEGATIVE_THEOREMS"
 

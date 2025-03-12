@@ -180,7 +180,7 @@ Make sure you have "### Output\n```json" in your response."""
                     ])
         
         # Add API's dependent tables
-        if api.dependencies.tables:
+        if api.dependencies.tables and api.dependencies.tables != [table.name]:
             sections.append("\n# Dependent Tables of the current API")
             for table_name in api.dependencies.tables:
                 dep_table = project.get_table(service.name, table_name)

@@ -2,6 +2,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 import json
 from logging import Logger
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from src.types.project import ProjectStructure, Service, Table, APIFunction
 from src.utils.apis.langchain_client import _call_openai_completion_async
@@ -123,8 +125,53 @@ Important:
         
         return dependencies
 
-    async def analyze(self, project: ProjectStructure, logger: Logger = None) -> ProjectStructure:
+    async def _analyze_parallel(self, project: ProjectStructure, logger: Logger = None, max_workers: int = 1) -> ProjectStructure:
+        """Analyze table dependencies for all APIs in parallel"""
+        if logger:
+            logger.info(f"Analyzing API table dependencies in parallel for project: {project.name} with {max_workers} workers")
+
+        # Create tasks for each API
+        tasks = []
+        for service in project.services:
+            if logger:
+                logger.info(f"Processing service: {service.name}")
+                
+            for api in service.apis:
+                tasks.append((project, service, api))
+
+        # Process APIs in parallel using ThreadPoolExecutor
+        async def process_api(task):
+            project, service, api = task
+            try:
+                dependencies = await self.analyze_api(project, service, api, logger)
+                api.dependencies.tables = dependencies
+                
+                if logger:
+                    logger.debug(f"API {api.name} depends on tables: {dependencies}")
+                    
+            except Exception as e:
+                if logger:
+                    logger.error(f"Failed to analyze API {api.name}: {e}")
+                raise
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_with_semaphore(task):
+            async with sem:
+                await process_api(task)
+
+        # Run all tasks
+        await asyncio.gather(*[process_with_semaphore(task) for task in tasks])
+                    
+        return project
+
+    async def analyze(self, project: ProjectStructure, logger: Logger = None, max_workers: int = 1) -> ProjectStructure:
         """Analyze table dependencies for all APIs in the project"""
+        if max_workers > 1:
+            return await self._analyze_parallel(project, logger, max_workers)
+            
+        # Original sequential logic
         if logger:
             logger.info(f"Analyzing API table dependencies for project: {project.name}")
             

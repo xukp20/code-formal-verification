@@ -3,11 +3,12 @@ from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 import json
 from collections import defaultdict
+import asyncio
+from logging import Logger
 
 from src.types.lean_file import LeanFile, LeanFunctionFile, LeanStructureFile, LeanTheoremFile
 from src.types.lean_manager import LeanProjectManager
 from src.types.lean_structure import LeanProjectStructure
-from logging import Logger
 
 logger = Logger(__name__)
 
@@ -630,7 +631,21 @@ class ProjectStructure:
     lean_project_name: Optional[str] = None
     lean_project_path: Optional[Path] = None
     services: List[Service] = field(default_factory=list)
-    api_topological_order: List[Tuple[str, str]] = field(default_factory=list)  # List of (service_name, api_name)
+    api_topological_order: Optional[List[Tuple[str, str]]] = None
+    _file_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    async def acquire_lock(self):
+        """Acquire lock for file operations"""
+        await self._file_lock.acquire()
+
+    def release_lock(self):
+        """Release lock for file operations"""
+        if self._file_lock.locked():
+            self._file_lock.release()
+
+    def has_lock(self) -> bool:
+        """Check if lock is currently held"""
+        return self._file_lock.locked()
 
     # Automatically write all the LeanFile objs in the project after initialization to the lean project
     def write_lean_files(self) -> None:
