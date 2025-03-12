@@ -16,25 +16,40 @@ class APIDocGenerator:
 For each API, you should focus on:
 1. Overall functionality summary
 2. Input/output types and their meanings
-3. Detailed behavior for different input scenarios, including:
+3. The APIs it depends on, which means those it calls
+4. Detailed behavior for different input scenarios, including:
    - Success cases
    - Error cases
    - Edge cases
    - Input validation
    - Response patterns
+5. You need to explain the response using the returned result and type from the dependent APIs
+   - Like "If login succeeds, look for the user info in the user info table, and return success with the user info"
+
 
 Format your response as a clear description that covers:
 1. What the API does (high-level summary)
 2. What inputs it accepts and what outputs it returns
 3. How it behaves in different scenarios
 
-Example format:
+Example format 1:
+
 Accepts user credentials (username and password). Validates the input and:
 - If credentials match: Returns success with user session
 - If user not found: Returns failure with "invalid credentials" message
 - If password incorrect: Returns failure with "invalid credentials" message
 - If multiple matching users: Returns error indicating database integrity issue
 
+Example format 2:
+
+This API accepts three parameters: a username, a password, and an amount of money. It relies on the BalanceQuery API:
+- Verify that the amount must be a positive integer; if not, return an "Invalid Parameter" error.
+- Call the Balance Query function:
+    - If it returns an authentication failure, return an authentication failure
+    - If it returns a database error, return a database error
+    - If the current balance is retrieved successfully, calculate the new balance after the withdrawal:
+        - If the new balance is negative, return an insufficient balance error
+        - If the new balance is non-negative, write a withdrawal record to the transaction table with the `amount` as the negative value of the withdrawal amount, and return the new balance, indicating success.
 
 Requirement:
 - The doc should be a short pure text, no markdown format

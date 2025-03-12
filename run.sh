@@ -37,8 +37,8 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-task="formalize"
-# task="theorem_generate"
+# task="formalize"
+task="theorem_generate"
 # task="prove"
 
 max_theorem_retries=5
