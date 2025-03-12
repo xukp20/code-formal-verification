@@ -42,6 +42,13 @@ class LeanFile:
 <section content>
 """
 
+    def has_any_content(self) -> bool:
+        """Check if any content is present in the file"""
+        # Any field except relative_path and _backup
+        fields = {k: v for k, v in self.__dict__.items() 
+                 if k != 'relative_path' and k != '_backup' and v is not None and v != ''}
+        return any(fields.values())
+
     def generate_content(self) -> str:
         """Generate complete file content by concatenating all non-empty fields
         
@@ -63,7 +70,7 @@ class LeanFile:
             ])
 
         # Add namespace
-        if self.imports is not None:
+        if self.has_any_content():
             content.extend([
                 "-- namespace",
                 self.get_namespace(),
@@ -80,7 +87,7 @@ class LeanFile:
                 ])
 
         # Add end namespace
-        if self.imports is not None:
+        if self.has_any_content():
             content.extend([
                 "-- end namespace",
                 self.get_end_namespace(),
@@ -240,6 +247,19 @@ theorem myTheorem (x : Type) : Type := by
 end <current file path>  -- This is automatically generated
 """ 
         return base
+
+    def has_any_content(self) -> bool:
+        """Check if any content is present in the theorem file"""
+        return any(
+            [
+                self.imports,
+                self.helper_functions,
+                self.comment,
+                self.theorem_proved,
+                self.theorem_unproved
+            ]
+        )
+        
     
     def generate_content(self) -> str:
         """Override to use proved theorem if available"""
@@ -254,7 +274,7 @@ end <current file path>  -- This is automatically generated
             ])
 
         # Add namespace
-        if self.imports is not None:
+        if self.has_any_content():
             content.extend([
                 "-- namespace",
                 self.get_namespace(),
@@ -292,7 +312,7 @@ end <current file path>  -- This is automatically generated
             ])
         
         # Add end namespace
-        if self.imports is not None:
+        if self.has_any_content():
             content.extend([
                 "-- end namespace",
                 self.get_end_namespace(),

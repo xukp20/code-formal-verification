@@ -30,6 +30,10 @@ To be specific, in the input part, we may explain:
 1. Input param requirements
 2. Database state requirements, maybe related to the input params
 3. Dependent API responses given the input params if any dependent APIs are called
+4. May need to add some other premises in advance to rule out some possible errors:
+    - For example, to make a login API works correctly, we need to assume that the user table has no duplicate users. So If you want to check the database error response, you can assume the user table has duplicate users.
+    - But if you want to check the success response or the invalid credential error response, you need to express first that the user table has no duplicate users as the high level premise, after that explaining if the user exists or if the password is correct to determine the response.
+    - You need to express this kind of premise in the requirements too, to make sure the requirement correctly describe the API behavior.
 
 The output part will be:
 1. The response of the API

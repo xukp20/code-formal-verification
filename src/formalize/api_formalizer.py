@@ -50,6 +50,8 @@ Convert the given API implementation into Lean 4 code following these requiremen
      - Only make sure every API has the related tables as parameters and return the updated tables as outputs.
    - Note that we need to check the correctness of the API, by examining both the output and the new table status, so in the current API and its helper functions, you MUST NOT ignore any updated table by assuming it is not changed.
    - You should always take the updated tables from a helper function that uses the table or a dependent API to use it for the future operations until return it as the part of the return value.
+   
+   - Order of records: Since in the structure of the Table we use a list of records to represent the table content which is actually a set, you should always add the new record to the end of the list if needed.
 
 3. API dependencies:
    - A call to another API is in the format of xxxMessage.send in the Planner code, and you should import and open the dependent API file and formalize the api call as a function call to that API which is already formalized.
