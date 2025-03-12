@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Tuple, Set
 import json
 from logging import Logger
 import random
+import asyncio
 
 from src.types.project import ProjectStructure, Service, Table, APIFunction, TableTheorem
 from src.types.lean_file import LeanTheoremFile
@@ -358,6 +359,7 @@ theorem userLoginPreservesUniquePhoneNumbers
                           service: Service,
                           table: Table,
                           theorem: TableTheorem,
+                          property_id: int,
                           theorem_id: int,
                           examples: List[str],
                           negative: bool = False,
@@ -438,6 +440,9 @@ theorem userLoginPreservesUniquePhoneNumbers
                 logger.model_output(f"Theorem proving response:\n{response}")
                 
             if not response:
+                await project.acquire_lock()
+                project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
                 
             try:
@@ -450,106 +455,209 @@ theorem userLoginPreservesUniquePhoneNumbers
                     logger.error(f"Failed to process response: {e}")
                 error_message = str(e)
                 last_post_process_error = ""  # Reset post process error
+                await project.acquire_lock()
                 project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
 
             # Post-process response
-            post_process_error = self._post_process_response(fields, lean_file, logger)
-            if post_process_error:
-                if logger:
-                    logger.warning(f"Post-processing failed: {post_process_error}")
-                last_post_process_error = post_process_error  # Set error message for next attempt
-                project.restore_lean_file(lean_file)
-                continue
+            await project.acquire_lock()
+            try:
+                post_process_error = self._post_process_response(fields, lean_file, logger)
+                if post_process_error:
+                    if logger:
+                        logger.warning(f"Post-processing failed: {post_process_error}")
+                    last_post_process_error = post_process_error  # Set error message for next attempt
+                    project.restore_lean_file(lean_file)
+                    project.release_lock()
+                    continue
 
-            last_post_process_error = ""  # Reset post process error if no issues found
+                last_post_process_error = ""  # Reset post process error if no issues found
 
-            # Update theorem file
-            project.update_lean_file(lean_file, fields)
-            
-            # Try compilation
-            success, error_message = project.build(parse=True, add_context=True, only_errors=True, only_first=True)
-            lean_file_content = lean_file.to_markdown()
-            if success:
-                if logger:
-                    logger.info(f"Successfully proved theorem for table {table.name}")
-                return True
+                # Update theorem file
+                project.update_lean_file(lean_file, fields)
                 
-            # Try backward build to get proof state
-            unsolved_goals, partial_proof = project.backward_build(lean_file)
-            # If have partial proof but no error message, then we have found a correct proof
-            if partial_proof and not unsolved_goals:
-                if logger:
-                    logger.info(f"Successfully proved theorem for table {table.name}")
-                # set the proof state to the partial proof
-                project.update_lean_file(lean_file, {"theorem_proved": partial_proof})
-                return True
-            elif not partial_proof and not unsolved_goals:
-                if logger:
-                    logger.warning(f"Failed to find valid partial proof for {lean_file.theorem_proved}")
-                # restore the backup
-                # project.restore_lean_file(lean_file)
-                # return False
-                unsolved_goals = "Unknown"
-                partial_proof = "None of the tactics worked"
-            
-            # Restore on failure
-            project.restore_lean_file(lean_file)
+                # Try compilation
+                success, error_message = project.build(parse=True, add_context=True, only_errors=True, only_first=True)
+                lean_file_content = lean_file.to_markdown()
+                if success:
+                    if logger:
+                        logger.info(f"Successfully proved theorem for table {table.name}")
+                    project.release_lock()
+                    return True
+                    
+                # Try backward build to get proof state
+                unsolved_goals, partial_proof = project.backward_build(lean_file)
+                # If have partial proof but no error message, then we have found a correct proof
+                if partial_proof and not unsolved_goals:
+                    if logger:
+                        logger.info(f"Successfully proved theorem for table {table.name}")
+                    # set the proof state to the partial proof
+                    project.update_lean_file(lean_file, {"theorem_proved": partial_proof})
+                    project.release_lock()
+                    return True
+                elif not partial_proof and not unsolved_goals:
+                    if logger:
+                        logger.warning(f"Failed to find valid partial proof for {lean_file.theorem_proved}")
+                    # restore the backup
+                    # project.restore_lean_file(lean_file)
+                    # return False
+                    unsolved_goals = "Unknown"
+                    partial_proof = "None of the tactics worked"
+                
+                # Restore on failure
+                project.restore_lean_file(lean_file)
+            finally:
+                project.release_lock()
                 
         return False 
     
+    async def _prove_parallel(self,
+                            project: ProjectStructure,
+                            negative: bool = False,
+                            logger: Optional[Logger] = None,
+                            max_workers: int = 1) -> ProjectStructure:
+        """Prove table theorems in parallel with dynamic examples"""
+        if logger:
+            theorem_type = "negative" if negative else "positive"
+            logger.info(f"Proving table {theorem_type} theorems in parallel for project: {project.name}")
+
+        # Create theorem queue
+        theorem_queue: List[Tuple[Service, Table, TableTheorem, int, int]] = []
+        
+        # Collect all theorems that need proving
+        for service in project.services:
+            for table in service.tables:
+                if not table.properties:
+                    continue
+                for property_id, property in enumerate(table.properties):
+                    if not property.theorems:
+                        continue
+                    for theorem_id, theorem in enumerate(property.theorems):
+                        # Check if theorem needs proving
+                        if negative:
+                            if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
+                                continue
+                        else:
+                            if not theorem.theorem or theorem.theorem.theorem_proved:
+                                continue
+                        
+                        theorem_queue.append((service, table, theorem, property_id, theorem_id))
+
+        if not theorem_queue:
+            if logger:
+                logger.info("No theorems to prove")
+            return project
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_theorem(service: Service, table: Table, 
+                                theorem: TableTheorem, property_id: int,
+                                theorem_id: int, examples: List[LeanTheoremFile]) -> None:
+            """Process a single theorem"""
+            if logger:
+                logger.info(f"Processing theorem {theorem_id} for table: {table.name}")
+            
+            await self.prove_theorem(
+                project=project,
+                service=service,
+                table=table,
+                theorem=theorem,
+                property_id=property_id,
+                theorem_id=theorem_id,
+                examples=examples,
+                negative=negative,
+                logger=logger
+            )
+
+        async def process_with_semaphore(task_tuple: Tuple, examples: List[LeanTheoremFile]):
+            service, table, theorem, property_id, theorem_id = task_tuple
+            async with sem:
+                await process_theorem(service, table, theorem, property_id, theorem_id, examples)
+
+        # Process theorems in batches
+        while theorem_queue:
+            # Collect fresh examples for this batch
+            examples = self._collect_examples(project, self.max_examples, negative=negative)
+            if logger:
+                logger.info(f"Collected {len(examples)} proof examples for next batch")
+
+            # Create tasks for next batch of theorems
+            tasks = []
+            while len(tasks) < max_workers and theorem_queue:
+                task_tuple = theorem_queue.pop(0)
+                tasks.append(process_with_semaphore(task_tuple, examples))
+
+            # Process batch of theorems
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+            if logger:
+                logger.info(f"Completed batch of {len(tasks)} theorems. {len(theorem_queue)} remaining")
+
+        return project
+
     async def prove(self,
                    project: ProjectStructure,
                    negative: bool = False,
-                   logger: Optional[Logger] = None) -> ProjectStructure:
+                   logger: Optional[Logger] = None,
+                   max_workers: int = 1) -> ProjectStructure:
         """Prove all table theorems in the project"""
         if logger:
             theorem_type = "negative" if negative else "positive"
             logger.info(f"Proving table {theorem_type} theorems for project: {project.name}")
-            
+
+        if max_workers > 1:
+            return await self._prove_parallel(project, negative, logger, max_workers)
+
+        # Original sequential logic
         for global_attempt in range(self.max_global_attempts):
             if logger:
                 logger.info(f"Global attempt {global_attempt + 1}/{self.max_global_attempts}")
-                
+            
             # Track unproved theorems
             unproved_count = 0
             
             # Try to prove all unproved theorems
             for service in project.services:
                 for table in service.tables:
-                    if table.properties:
-                        for property in table.properties:
-                            if property.theorems:
-                                for id, theorem in enumerate(property.theorems):
-                                    # Check appropriate theorem based on negative flag
-                                    if negative:
-                                        if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
-                                            continue
-                                    else:
-                                        if not theorem.theorem or theorem.theorem.theorem_proved:
-                                            continue
-                                    
-                                    # Collect fresh examples before each theorem attempt
-                                    examples = self._collect_examples(project, self.max_examples, negative=negative)
-                                    if logger:
-                                        logger.info(f"Collected {len(examples)} proof examples for {table.name} theorem {id}")
-                                    
-                                    success = await self.prove_theorem(
-                                        project=project,
-                                        service=service,
-                                        table=table,
-                                        theorem=theorem,
-                                        theorem_id=id,
-                                        examples=examples,
-                                        negative=negative,
-                                        logger=logger
-                                    )
-                                    
-                                    if not success:
-                                        unproved_count += 1
-                                        if logger:
-                                            theorem_type = "negative" if negative else "positive"
-                                            logger.warning(f"Failed to prove {theorem_type} theorem for table {table.name}")
+                    if not table.properties:
+                        continue
+                    for property_id, property in enumerate(table.properties):
+                        if not property.theorems:
+                            continue
+                        for theorem_id, theorem in enumerate(property.theorems):
+                            # Check appropriate theorem based on negative flag
+                            if negative:
+                                if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
+                                    continue
+                            else:
+                                if not theorem.theorem or theorem.theorem.theorem_proved:
+                                    continue
+                            
+                            # Collect fresh examples before each theorem attempt
+                            examples = self._collect_examples(project, self.max_examples, negative=negative)
+                            if logger:
+                                logger.info(f"Collected {len(examples)} proof examples for {table.name} theorem {theorem_id}")
+                            
+                            success = await self.prove_theorem(
+                                project=project,
+                                service=service,
+                                table=table,
+                                theorem=theorem,
+                                property_id=property_id,
+                                theorem_id=theorem_id,
+                                examples=examples,
+                                negative=negative,
+                                logger=logger
+                            )
+                            
+                            if not success:
+                                unproved_count += 1
+                                if logger:
+                                    theorem_type = "negative" if negative else "positive"
+                                    logger.warning(f"Failed to prove {theorem_type} theorem for table: {table.name}")
                                 
             # Check if all theorems are proved
             if unproved_count == 0:

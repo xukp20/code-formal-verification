@@ -37,15 +37,15 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-task="formalize"
+# task="formalize"
 # task="theorem_generate"
-# task="prove"
+task="prove"
 
 max_theorem_retries=5
 max_global_attempts=4
 max_examples=3
 
-max_workers=2
+max_workers=4
 
 # continue=true
 # start_state="API_THEOREMS"
@@ -76,7 +76,8 @@ elif [ "$task" == "theorem_generate" ]; then
 --project-base-path $project_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model"
+--model $model \
+--max-workers $max_workers"
 
 elif [ "$task" == "prove" ]; then
     command="python src/pipelines/prove_pipeline.py \
@@ -88,7 +89,8 @@ elif [ "$task" == "prove" ]; then
 --prover-model $prover_model \
 --max-theorem-retries $max_theorem_retries \
 --max-global-attempts $max_global_attempts \
---max-examples $max_examples"
+--max-examples $max_examples \
+--max-workers $max_workers"
 
 else
     echo "Invalid task"

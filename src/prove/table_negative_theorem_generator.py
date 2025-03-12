@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import json
 from logging import Logger
+import asyncio
 
 from src.types.project import ProjectStructure, Service, Table, APIFunction, TableProperty, TableTheorem
 from src.types.lean_file import LeanTheoremFile
@@ -142,6 +143,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         history = []
         error_message = None
         lean_file_content = None
+
         for attempt in range(self.max_retries):
             if logger:
                 logger.info(f"Attempt {attempt + 1}/{self.max_retries}")
@@ -168,10 +170,18 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 temperature=0.0
             )
             
+            history.extend([
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": response if response else "Failed to get LLM response"}
+                ])
+            
             if logger:
                 logger.model_output(f"Negative theorem generation response:\n{response}")
                 
             if not response:
+                project.restore_lean_file(neg_lean_file)
+                project.release_lock()
+                error_message = "Failed to get LLM response"
                 continue
                 
             try:
@@ -181,39 +191,119 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to process response: {e}")
+                error_message = str(e)
+                await project.acquire_lock()
+                project.restore_lean_file(neg_lean_file)
+                project.release_lock()
                 continue
 
-            project.update_lean_file(neg_lean_file, fields)
-            
-            # Try compilation
-            success, error_message = project.build(parse=True, add_context=True, only_errors=True)
-            lean_file_content = neg_lean_file.to_markdown()
-
-            if success:
-                if logger:
-                    logger.info(f"Successfully generated negative theorem for {table.name} with API {theorem.api_name}")
-                return True
+            await project.acquire_lock()
+            try:
+                project.update_lean_file(neg_lean_file, fields)
                 
-            # Restore on failure
-            project.restore_lean_file(neg_lean_file)
-            history.extend([
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response}
-            ])
+                # Try compilation
+                success, error_message = project.build(parse=True, add_context=True, only_errors=True)
+                lean_file_content = neg_lean_file.to_markdown()
+
+                if success:
+                    if logger:
+                        logger.info(f"Successfully generated negative theorem for {table.name} with API {theorem.api_name}")
+                    project.release_lock()
+                    return True
+                    
+                # Restore on failure
+                project.restore_lean_file(neg_lean_file)
+            finally:
+                project.release_lock()
 
         # Clean up on failure
+        await project.acquire_lock()
         project.delete_table_theorem(service.name, table.name, property_id, theorem_id, negative=True)
+        project.release_lock()
         if logger:
             logger.error(f"Failed to generate negative theorem after {self.max_retries} attempts")
         return False
 
+    async def _generate_parallel(self,
+                               project: ProjectStructure,
+                               logger: Optional[Logger] = None,
+                               max_workers: int = 1) -> ProjectStructure:
+        """Generate negative theorems in parallel"""
+        if logger:
+            logger.info(f"Generating negative table theorems in parallel for project: {project.name}")
+
+        # Create theorem queue
+        theorem_queue: List[Tuple[Service, Table, TableTheorem, int, int]] = []
+        
+        # Collect all theorems that need negative versions
+        for service in project.services:
+            for table in service.tables:
+                if not table.properties:
+                    continue
+                for property_id, property in enumerate(table.properties):
+                    if not property.theorems:
+                        continue
+                    for theorem_id, theorem in enumerate(property.theorems):
+                        # Skip if theorem was proved or already has negative theorem
+                        if not theorem.theorem or theorem.theorem.theorem_proved or theorem.theorem_negative:
+                            continue
+                            
+                        theorem_queue.append((service, table, theorem, property_id, theorem_id))
+
+        if not theorem_queue:
+            if logger:
+                logger.info("No theorems need negative versions")
+            return project
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_theorem(service: Service, table: Table, 
+                                theorem: TableTheorem, property_id: int,
+                                theorem_id: int) -> None:
+            """Process a single theorem"""
+            if logger:
+                logger.info(f"Generating negative theorem {theorem_id} for table: {table.name}")
+            
+            await self.generate_negative_theorem(
+                project=project,
+                service=service,
+                table=table,
+                property=table.properties[property_id],
+                property_id=property_id,
+                theorem=theorem,
+                theorem_id=theorem_id,
+                logger=logger
+            )
+
+        async def process_with_semaphore(task_tuple: Tuple):
+            service, table, theorem, property_id, theorem_id = task_tuple
+            async with sem:
+                await process_theorem(service, table, theorem, property_id, theorem_id)
+
+        # Create tasks for all theorems
+        tasks = [process_with_semaphore(task_tuple) for task_tuple in theorem_queue]
+
+        # Process all theorems in parallel
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            if logger:
+                logger.info(f"Completed generating {len(tasks)} negative theorems")
+
+        return project
+
     async def generate(self,
                       project: ProjectStructure,
-                      logger: Optional[Logger] = None) -> ProjectStructure:
+                      logger: Optional[Logger] = None,
+                      max_workers: int = 1) -> ProjectStructure:
         """Generate negative theorems for all failed table proofs"""
         if logger:
             logger.info(f"Generating negative table theorems for project: {project.name}")
-            
+
+        if max_workers > 1:
+            return await self._generate_parallel(project, logger, max_workers)
+
+        # Original sequential logic
         for service in project.services:
             for table in service.tables:
                 if not table.properties:

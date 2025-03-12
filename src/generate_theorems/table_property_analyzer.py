@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 import json
 from logging import Logger
+import asyncio
 
 from src.types.project import ProjectStructure, Service, Table, APIFunction, TableProperty, TableTheorem
 from src.utils.apis.langchain_client import _call_openai_completion_async
@@ -144,10 +145,75 @@ Make sure you have "### Output\n```json" in your response so that I can find the
 
         return properties
 
+    async def _analyze_parallel(self,
+                              project: ProjectStructure,
+                              logger: Optional[Logger] = None,
+                              max_workers: int = 1) -> ProjectStructure:
+        """Analyze table properties in parallel"""
+        if logger:
+            logger.info(f"Analyzing table properties in parallel for project: {project.name}")
+
+        # Create tasks for each table
+        tasks = []
+        for service in project.services:
+            for table in service.tables:
+                # Get APIs that depend on this table
+                dependent_apis = [
+                    api for api in service.apis
+                    if table.name in api.dependencies.tables
+                ]
+                
+                if not dependent_apis:
+                    if logger:
+                        logger.info(f"No APIs depend on table {table.name}, skipping")
+                    continue
+                
+                tasks.append((table, dependent_apis))
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_table(task):
+            table, dependent_apis = task
+            if logger:
+                logger.info(f"Analyzing properties for table: {table.name}")
+            
+            try:
+                properties = await self.analyze_table(
+                    table=table,
+                    dependent_apis=dependent_apis,
+                    logger=logger
+                )
+                table.properties = properties
+                return True
+            except Exception as e:
+                if logger:
+                    logger.error(f"Failed to analyze table {table.name}: {e}")
+                return False
+
+        async def process_with_semaphore(task):
+            async with sem:
+                return await process_table(task)
+
+        # Process all tables in parallel
+        results = await asyncio.gather(*[process_with_semaphore(task) for task in tasks])
+
+        # Check for failures
+        if not all(results):
+            if logger:
+                logger.error("Some tables failed to analyze")
+
+        return project
+
     async def analyze(self,
                      project: ProjectStructure,
-                     logger: Optional[Logger] = None) -> ProjectStructure:
+                     logger: Optional[Logger] = None,
+                     max_workers: int = 1) -> ProjectStructure:
         """Analyze properties for all tables in the project"""
+        if max_workers > 1:
+            return await self._analyze_parallel(project, logger, max_workers)
+
+        # Original sequential logic
         if logger:
             logger.info(f"Analyzing table properties for project: {project.name}")
 

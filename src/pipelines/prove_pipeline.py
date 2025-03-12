@@ -48,6 +48,7 @@ class ProvePipeline(PipelineBase):
                  max_theorem_retries: int = 3,
                  max_examples: int = 5,
                  max_global_attempts: int = 3,
+                 max_workers: int = 1,
                  log_level: str = "INFO",
                  log_model_io: bool = False,
                  continue_from: bool = False,
@@ -69,6 +70,7 @@ class ProvePipeline(PipelineBase):
         self.max_theorem_retries = max_theorem_retries
         self.max_examples = max_examples
         self.max_global_attempts = max_global_attempts
+        self.max_workers = max_workers
 
     @property
     def state_enum(self) -> type[Enum]:
@@ -122,7 +124,7 @@ class ProvePipeline(PipelineBase):
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
             )
-            project = await prover.prove(project, negative=False, logger=self.logger)
+            project = await prover.prove(project, negative=False, logger=self.logger, max_workers=self.max_workers)
             self.save_output(ProveState.API_THEOREMS, project.to_dict())
             self.logger.info("API theorems proved")
 
@@ -139,7 +141,7 @@ class ProvePipeline(PipelineBase):
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
             )
-            project = await prover.prove(project, negative=False, logger=self.logger)
+            project = await prover.prove(project, negative=False, logger=self.logger, max_workers=self.max_workers)
             self.save_output(ProveState.TABLE_THEOREMS, project.to_dict())
             self.logger.info("Table theorems proved")
 
@@ -154,7 +156,7 @@ class ProvePipeline(PipelineBase):
                 model=self.generator_model,
                 max_retries=self.max_theorem_retries
             )
-            project = await generator.generate(project, logger=self.logger)
+            project = await generator.generate(project, logger=self.logger, max_workers=self.max_workers)
             self.save_output(ProveState.API_NEGATIVE_GENERATION, project.to_dict())
             self.logger.info("API negative theorems generated")
 
@@ -171,7 +173,7 @@ class ProvePipeline(PipelineBase):
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
             )
-            project = await prover.prove(project, negative=True, logger=self.logger)
+            project = await prover.prove(project, negative=True, logger=self.logger, max_workers=self.max_workers)
             self.save_output(ProveState.API_NEGATIVE_THEOREMS, project.to_dict())
             self.logger.info("API negative theorems proved")
 
@@ -186,7 +188,7 @@ class ProvePipeline(PipelineBase):
                 model=self.generator_model,
                 max_retries=self.max_theorem_retries
             )
-            project = await generator.generate(project, logger=self.logger)
+            project = await generator.generate(project, logger=self.logger, max_workers=self.max_workers)
             self.save_output(ProveState.TABLE_NEGATIVE_GENERATION, project.to_dict())
             self.logger.info("Table negative theorems generated")
 
@@ -203,7 +205,7 @@ class ProvePipeline(PipelineBase):
                 max_examples=self.max_examples,
                 max_global_attempts=self.max_global_attempts
             )
-            project = await prover.prove(project, negative=True, logger=self.logger)
+            project = await prover.prove(project, negative=True, logger=self.logger, max_workers=self.max_workers)
             self.save_output(ProveState.TABLE_NEGATIVE_THEOREMS, project.to_dict())
             self.logger.info("Table negative theorems proved")
 
@@ -254,6 +256,10 @@ def main():
                       choices=[s.name for s in ProveState],
                       help="Start from specific state (requires --continue)")
     
+    # Add max_workers argument
+    parser.add_argument("--max-workers", type=int, default=1,
+                      help="Maximum number of parallel workers")
+    
     args = parser.parse_args()
     
     if args.start_state and not args.continue_from:
@@ -272,6 +278,7 @@ def main():
         max_theorem_retries=args.max_theorem_retries,
         max_examples=args.max_examples,
         max_global_attempts=args.max_global_attempts,
+        max_workers=args.max_workers,
         log_level=args.log_level,
         log_model_io=args.log_model_io,
         continue_from=args.continue_from,

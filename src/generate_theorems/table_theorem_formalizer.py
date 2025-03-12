@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import json
 from logging import Logger
+import asyncio
 
 from src.types.project import ProjectStructure, Table, APIFunction, Service, TableProperty, TableTheorem
 from src.types.lean_file import LeanTheoremFile
@@ -203,11 +204,18 @@ Make sure you have "### Output\n```json" in your response."""
         """Formalize a single table theorem"""
         dep_api = project.get_api(service.name, theorem.api_name)
         if logger:
-            logger.info(f"Formalizing theorem for table {table.name} with API {dep_api.name}")
+            logger.info(f"Formalizing theorem for table {table.name} with API {theorem.api_name}")
 
-        # Initialize empty theorem file
+        # Initialize empty theorem file with lock
+        await project.acquire_lock()
         lean_file = project.init_table_theorem(service.name, table.name, property_id, theorem_id)
+        project.release_lock()
             
+        if not lean_file:
+            if logger:
+                logger.error(f"Failed to initialize theorem file for table {table.name}")
+            return False
+
         # Format dependencies
         dependencies = self._format_dependencies(service, table, dep_api, project)
         
@@ -228,7 +236,7 @@ Property: {property.description}
         history = []
         error_message = None
         lean_file_content = None
-
+        
         for attempt in range(self.max_retries):
             if logger:
                 logger.info(f"Attempt {attempt + 1}/{self.max_retries}")
@@ -242,10 +250,10 @@ Property: {property.description}
                 structure_template=structure_template,
                 lean_file=lean_file_content
             ) if attempt > 0 else system_prompt + "\n\n" + user_prompt)
-            
+                
             if logger:
                 logger.model_input(f"Theorem formalization prompt:\n{prompt}")
-                
+
             # Call LLM
             response = await _call_openai_completion_async(
                 model=self.model,
@@ -264,6 +272,10 @@ Property: {property.description}
                 logger.model_output(f"Theorem formalization response:\n{response}")
                 
             if not response:
+                await project.acquire_lock()
+                project.restore_lean_file(lean_file)
+                project.release_lock()
+                error_message = "Failed to get LLM response"
                 continue
                 
             try:
@@ -274,6 +286,10 @@ Property: {property.description}
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to parse response: {e}")
+                error_message = str(e)
+                await project.acquire_lock()
+                project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
             
             # Get description out of fields
@@ -281,31 +297,93 @@ Property: {property.description}
             theorem.description = description
             fields = {k: v for k, v in fields.items() if k != "description"}
 
-            # Update theorem file
-            project.update_lean_file(lean_file, fields)
-            
-            # Try compilation
-            success, error_message = project.build(parse=True, add_context=True, only_errors=True)
-            lean_file_content = lean_file.to_markdown()
-            
-            if success:
-                if logger:
-                    logger.info(f"Successfully formalized theorem for table {table.name} with API {dep_api.name}")
-                return True
-                    
-            # Restore on failure
-            project.restore_lean_file(lean_file)
+            # Update and build with lock
+            await project.acquire_lock()
+            try:
+                # Update theorem file
+                project.update_lean_file(lean_file, fields)
                 
-        # Clean up on failure
+                # Try compilation
+                success, error_message = project.build(parse=True, add_context=True, only_errors=True)
+                if success:
+                    if logger:
+                        logger.info(f"Successfully formalized theorem for table {table.name}")
+                    project.release_lock()
+                    return True
+                    
+                # Restore on failure
+                lean_file_content = lean_file.to_markdown()
+                project.restore_lean_file(lean_file)
+            finally:
+                project.release_lock()
+                
+        # Clean up on failure with lock
+        await project.acquire_lock()
         project.delete_table_theorem(service.name, table.name, property_id, theorem_id)
+        project.release_lock()
+        
         if logger:
             logger.error(f"Failed to formalize theorem after {self.max_retries} attempts")
         return False
 
+    async def _formalize_parallel(self,
+                                project: ProjectStructure,
+                                logger: Optional[Logger] = None,
+                                max_workers: int = 1) -> ProjectStructure:
+        """Formalize table theorems in parallel"""
+        if logger:
+            logger.info(f"Formalizing table theorems in parallel for project: {project.name}")
+
+        # Create tasks for each theorem
+        tasks = []
+        for service in project.services:
+            for table in service.tables:
+                if not table.properties:
+                    continue
+                    
+                for property_id, property in enumerate(table.properties):
+                    for theorem_id, theorem in enumerate(property.theorems):
+                        tasks.append((service, table, property, property_id, theorem, theorem_id))
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_theorem(task):
+            service, table, property, property_id, theorem, theorem_id = task
+            return await self.formalize_theorem(
+                project=project,
+                service=service,
+                table=table,
+                property=property,
+                property_id=property_id,
+                theorem=theorem,
+                theorem_id=theorem_id,
+                logger=logger
+            )
+
+        async def process_with_semaphore(task):
+            async with sem:
+                return await process_theorem(task)
+
+        # Process all theorems in parallel
+        results = await asyncio.gather(*[process_with_semaphore(task) for task in tasks])
+
+        # Check for failures
+        if not all(results):
+            if logger:
+                logger.error("Some theorems failed to formalize")
+
+        return project
+
     async def formalize(self,
                        project: ProjectStructure,
-                       logger: Optional[Logger] = None) -> ProjectStructure:
+                       logger: Optional[Logger] = None,
+                       max_workers: int = 1) -> ProjectStructure:
         """Formalize all table theorems in the project"""
+        if max_workers > 1:
+            return await self._formalize_parallel(project, logger, max_workers)
+            
+        # Original sequential logic
         if logger:
             logger.info(f"Formalizing table theorems for project: {project.name}")
             
@@ -338,6 +416,5 @@ Property: {property.description}
                         if not success:
                             if logger:
                                 logger.error(f"Failed to formalize theorem for table {table.name}")
-                            break
 
         return project 

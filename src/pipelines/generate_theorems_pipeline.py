@@ -42,6 +42,7 @@ class TheoremGenerationPipeline(PipelineBase):
                  model: str = "qwen-max",
                  api_theorem_retries: int = 3,
                  table_theorem_retries: int = 3,
+                 max_workers: int = 1,
                  doc_path: Optional[str] = None,
                  log_level: str = "INFO",
                  log_model_io: bool = False,
@@ -62,6 +63,7 @@ class TheoremGenerationPipeline(PipelineBase):
         self.model = model
         self.api_theorem_retries = api_theorem_retries
         self.table_theorem_retries = table_theorem_retries
+        self.max_workers = max_workers
         self.doc_path = doc_path
 
     @property
@@ -110,7 +112,7 @@ class TheoremGenerationPipeline(PipelineBase):
                 project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.INIT))
             
             generator = APIRequirementGenerator(model=self.model)
-            project = await generator.generate(project, self.doc_path, self.logger)
+            project = await generator.generate(project, self.doc_path, self.logger, max_workers=self.max_workers)
             self.save_output(TheoremGenerationState.API_REQUIREMENTS, project.to_dict())
             self.logger.info("API requirements generated")
 
@@ -125,7 +127,7 @@ class TheoremGenerationPipeline(PipelineBase):
                 model=self.model,
                 max_retries=self.api_theorem_retries
             )
-            project = await formalizer.formalize(project, self.logger)
+            project = await formalizer.formalize(project, self.logger, max_workers=self.max_workers)
             self.save_output(TheoremGenerationState.API_THEOREMS, project.to_dict())
             self.logger.info("API theorems formalized")
 
@@ -136,10 +138,8 @@ class TheoremGenerationPipeline(PipelineBase):
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.API_THEOREMS))
             
-            analyzer = TablePropertyAnalyzer(
-                model=self.model
-            )
-            project = await analyzer.analyze(project, self.logger)
+            analyzer = TablePropertyAnalyzer(model=self.model)
+            project = await analyzer.analyze(project, self.logger, max_workers=self.max_workers)
             self.save_output(TheoremGenerationState.TABLE_PROPERTIES, project.to_dict())
             self.logger.info("Table properties analyzed")
 
@@ -154,7 +154,7 @@ class TheoremGenerationPipeline(PipelineBase):
                 model=self.model,
                 max_retries=self.table_theorem_retries
             )
-            project = await formalizer.formalize(project, self.logger)
+            project = await formalizer.formalize(project, self.logger, max_workers=self.max_workers)
             self.save_output(TheoremGenerationState.TABLE_THEOREMS, project.to_dict())
             self.logger.info("Table theorems formalized")
 
@@ -191,6 +191,10 @@ def main():
                       help="Maximum retries for API theorem formalizer")
     parser.add_argument("--table-theorem-retries", type=int, default=8,
                       help="Maximum retries for table theorem formalizer")
+    
+    # Parallel processing
+    parser.add_argument("--max-workers", type=int, default=1,
+                      help="Maximum number of parallel workers")
     
     # Logging settings
     parser.add_argument("--log-level", default="INFO",
@@ -230,6 +234,7 @@ def main():
         doc_path=args.doc_path,
         api_theorem_retries=args.api_theorem_retries,
         table_theorem_retries=args.table_theorem_retries,
+        max_workers=args.max_workers,
         log_level=args.log_level,
         log_model_io=args.log_model_io,
         continue_from=args.continue_from,

@@ -1,7 +1,8 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 import json
 from logging import Logger
+import asyncio
 
 from src.types.project import ProjectStructure, Service, APIFunction, APITheorem
 from src.types.lean_file import LeanTheoremFile
@@ -219,9 +220,16 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         if logger:
             logger.info(f"Formalizing theorem for {service.name}.{api.name}: {theorem.description}")
 
-        # Initialize empty theorem file
+        # Initialize empty theorem file with lock
+        await project.acquire_lock()
         lean_file = project.init_api_theorem(service.name, api.name, theorem_id)
+        project.release_lock()
             
+        if not lean_file:
+            if logger:
+                logger.error(f"Failed to initialize theorem file for {api.name}")
+            return False
+
         # Format dependencies
         dependencies = self._format_dependencies(api, project)
         
@@ -284,6 +292,10 @@ Service: {service.name}
                 logger.model_output(f"Theorem formalization response:\n{response}")
                 
             if not response:
+                await project.acquire_lock()
+                project.restore_lean_file(lean_file)
+                project.release_lock()
+                error_message = "Failed to get LLM response"
                 continue
                 
             try:
@@ -293,38 +305,146 @@ Service: {service.name}
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to process response: {e}")
+                error_message = str(e)
+                await project.acquire_lock()
+                project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
 
-            # Update theorem file
-            project.update_lean_file(lean_file, fields)
-            
-            # Try compilation
-            success, error = project.build(parse=True, add_context=True, only_errors=True)
-            lean_file_content = lean_file.to_markdown()
-
-            if success:
-                if logger:
-                    logger.info(f"Successfully formalized theorem for {api.name}")
-                return True
+            # Update and build with lock
+            await project.acquire_lock()
+            try:
+                # Update theorem file
+                project.update_lean_file(lean_file, fields)
                 
-            # Restore on failure
-            project.restore_lean_file(lean_file)
-            error_message = error
+                # Try compilation
+                success, error_message = project.build(parse=True, add_context=True, only_errors=True)
+                if success:
+                    if logger:
+                        logger.info(f"Successfully formalized theorem for {api.name}")
+                    project.release_lock()
+                    return True
+                    
+                # Restore on failure
+                lean_file_content = lean_file.to_markdown()
+                project.restore_lean_file(lean_file)
+            finally:
+                project.release_lock()
                 
-        # Clean up on failure
+        # Clean up on failure with lock
+        await project.acquire_lock()
         project.delete_api_theorem(service.name, api.name, theorem_id)
+        project.release_lock()
+        
         if logger:
             logger.error(f"Failed to formalize theorem after {self.max_retries} attempts")
         return False
 
+    async def _formalize_parallel(self,
+                                project: ProjectStructure,
+                                logger: Optional[Logger] = None,
+                                max_workers: int = 1) -> ProjectStructure:
+        """Formalize API theorems in parallel"""
+        if logger:
+            logger.info(f"Formalizing API theorems in parallel for project: {project.name}")
+
+        # Initialize tracking sets
+        pending_apis = {(service.name, api.name) 
+                       for service in project.services 
+                       for api in service.apis}
+        completed_apis = set()
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_theorem(service: Service, api: APIFunction, 
+                                theorem: APITheorem, theorem_id: int) -> None:
+            """Process a single theorem"""
+            if logger:
+                logger.info(f"Processing theorem {theorem_id} for API: {api.name}")
+            
+            success = await self.formalize_theorem(
+                project=project,
+                service=service,
+                api=api,
+                theorem=theorem,
+                theorem_id=theorem_id,
+                logger=logger
+            )
+            
+            if not success and logger:
+                logger.error(f"Failed to formalize theorem {theorem_id} for API: {api.name}")
+
+        async def process_with_semaphore(service: Service, api: APIFunction, 
+                                       theorem: APITheorem, theorem_id: int):
+            async with sem:
+                await process_theorem(service, api, theorem, theorem_id)
+
+        while pending_apis:
+            # Find APIs whose dependencies are all completed
+            ready_apis = set()
+            for service_name, api_name in pending_apis:
+                api = project.get_api(service_name, api_name)
+                if not api:
+                    continue
+                    
+                deps_completed = all((dep_service, dep_api) in completed_apis 
+                                  for dep_service, dep_api in api.dependencies.apis)
+                if deps_completed:
+                    ready_apis.add((service_name, api_name))
+
+            if not ready_apis:
+                if logger:
+                    logger.warning("No APIs ready to process, possible circular dependency")
+                break
+
+            # Create tasks for all theorems of ready APIs
+            tasks = []
+            for service_name, api_name in ready_apis:
+                service = project.get_service(service_name)
+                api = project.get_api(service_name, api_name)
+                if not service or not api:
+                    continue
+                
+                if not api.theorems:
+                    if logger:
+                        logger.warning(f"No theorems to formalize for API: {api.name}")
+                    continue
+
+                # Add all theorems from this API to tasks
+                for theorem_id, theorem in enumerate(api.theorems):
+                    tasks.append(process_with_semaphore(service, api, theorem, theorem_id))
+
+            # Process all theorems in parallel and wait for completion
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Update pending and completed sets
+            pending_apis -= ready_apis
+            completed_apis.update(ready_apis)
+
+            if logger:
+                logger.info(f"Completed processing APIs: {', '.join(f'{s}.{a}' for s,a in ready_apis)}")
+
+        return project
+
     async def formalize(self,
                        project: ProjectStructure,
-                       logger: Optional[Logger] = None) -> ProjectStructure:
+                       logger: Optional[Logger] = None,
+                       max_workers: int = 1) -> ProjectStructure:
         """Formalize all API theorems in the project"""
+        if not project.api_topological_order:
+            if logger:
+                logger.warning("No API topological order available, skipping formalization")
+            return project
+
+        if max_workers > 1:
+            return await self._formalize_parallel(project, logger, max_workers)
+            
+        # Original sequential logic
         if logger:
             logger.info(f"Formalizing API theorems for project: {project.name}")
             
-        # Run in topological order
         for service_name, api_name in project.api_topological_order:
             service = project.get_service(service_name)
             if not service:
@@ -353,6 +473,5 @@ Service: {service.name}
                 if not success:
                     if logger:
                         logger.error(f"Failed to formalize theorem for API: {api.name}")
-                    break
 
         return project 

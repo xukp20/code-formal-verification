@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Tuple, Set
 import json
 from logging import Logger
 import random
+import asyncio
 
 from src.types.project import ProjectStructure, Service, APIFunction, APITheorem
 from src.types.lean_file import LeanTheoremFile
@@ -376,16 +377,15 @@ theorem userLoginSuccessWhenCredentialsMatch
                           logger: Optional[Logger] = None) -> bool:
         """Prove a single API theorem"""
         if logger:
-            theorem_type = "negative" if negative else "positive"
-            logger.info(f"Proving {theorem_type} theorem {theorem_id} for API {api.name}")
-            
-        # Select appropriate theorem file
+            logger.info(f"Proving theorem for {service.name}.{api.name}: {theorem.description}")
+
+        # Get theorem file with lock
         lean_file = theorem.theorem_negative if negative else theorem.theorem
         if not lean_file:
             if logger:
-                logger.error(f"No theorem file found for API {api.name}")
+                logger.error(f"Failed to get theorem file for {api.name}")
             return False
-        
+
         # Format dependencies
         dependencies = self._format_dependencies(service, api, project, examples)
         
@@ -441,6 +441,9 @@ theorem userLoginSuccessWhenCredentialsMatch
                 logger.model_output(f"Theorem proving response:\n{response}")
                 
             if not response:
+                await project.acquire_lock()
+                project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
                 
             try:
@@ -453,63 +456,207 @@ theorem userLoginSuccessWhenCredentialsMatch
                     logger.error(f"Failed to process response: {e}")
                 error_message = str(e)
                 last_post_process_error = ""  # Reset post process error
+                await project.acquire_lock()
                 project.restore_lean_file(lean_file)
+                project.release_lock()
                 continue
 
             # Post-process response
-            post_process_error = self._post_process_response(fields, lean_file, logger)
-            if post_process_error:
-                if logger:
-                    logger.warning(f"Post-processing failed: {post_process_error}")
-                last_post_process_error = post_process_error  # Set error message for next attempt
-                project.restore_lean_file(lean_file)
-                continue
+            await project.acquire_lock()
+            try:
+                post_process_error = self._post_process_response(fields, lean_file, logger)
+                if post_process_error:
+                    if logger:
+                        logger.warning(f"Post-processing failed: {post_process_error}")
+                    last_post_process_error = post_process_error  # Set error message for next attempt
+                    project.restore_lean_file(lean_file)
+                    project.release_lock()
+                    continue
 
-            last_post_process_error = ""  # Reset post process error if no issues found
+                last_post_process_error = ""  # Reset post process error if no issues found
 
-            # Update theorem file
-            project.update_lean_file(lean_file, fields)
-            
-            # Try compilation
-            success, error_message = project.build(parse=True, add_context=True, only_errors=True, only_first=True)
-            lean_file_content = lean_file.to_markdown()
-            if success:
-                if logger:
-                    logger.info(f"Successfully proved theorem for {api.name}")
-                return True
+                # Update theorem file
+                project.update_lean_file(lean_file, fields)
                 
-            # Try backward build to get proof state
-            unsolved_goals, partial_proof = project.backward_build(lean_file)
-            # 1. If have partial proof but no error message, then we have find a correct proof
-            if partial_proof and not unsolved_goals:
-                if logger:
-                    logger.info(f"Successfully proved theorem for {api.name}")
-                # set the proof state to the partial proof
-                project.update_lean_file(lean_file, {"theorem_proved": partial_proof})
-                return True
-            elif not partial_proof and not unsolved_goals:
-                if logger:
-                    logger.warning(f"Failed to find valid partial proof for {lean_file.theorem_proved}")
-                # restore the backup
-                # project.restore_lean_file(lean_file)
-                # return False
-                unsolved_goals = "Unknown"
-                partial_proof = "None of the tactics worked"
-            
-            # Restore on failure
-            project.restore_lean_file(lean_file)
+                # Try compilation
+                success, error_message = project.build(parse=True, add_context=True, only_errors=True, only_first=True)
+                lean_file_content = lean_file.to_markdown()
+                if success:
+                    if logger:
+                        logger.info(f"Successfully proved theorem for {api.name}")
+                    project.release_lock()
+                    return True
+                    
+                # Try backward build to get proof state
+                unsolved_goals, partial_proof = project.backward_build(lean_file)
+                # 1. If have partial proof but no error message, then we have find a correct proof
+                if partial_proof and not unsolved_goals:
+                    if logger:
+                        logger.info(f"Successfully proved theorem for {api.name}")
+                    # set the proof state to the partial proof
+                    project.update_lean_file(lean_file, {"theorem_proved": partial_proof})
+                    project.release_lock()
+                    return True
+                elif not partial_proof and not unsolved_goals:
+                    if logger:
+                        logger.warning(f"Failed to find valid partial proof for {lean_file.theorem_proved}")
+                    # restore the backup
+                    # project.restore_lean_file(lean_file)
+                    # return False
+                    unsolved_goals = "Unknown"
+                    partial_proof = "None of the tactics worked"
+                
+                # Restore on failure
+                project.restore_lean_file(lean_file)
+            finally:
+                project.release_lock()
                 
         return False
+
+    async def _prove_parallel(self,
+                            project: ProjectStructure,
+                            negative: bool = False,
+                            logger: Optional[Logger] = None,
+                            max_workers: int = 1) -> ProjectStructure:
+        """Prove API theorems in parallel with dynamic examples"""
+        if logger:
+            theorem_type = "negative" if negative else "positive"
+            logger.info(f"Proving API {theorem_type} theorems in parallel for project: {project.name}")
+
+        # Initialize tracking structures - convert [service_name, api_name] to "service_name.api_name"
+        pending_apis = {f"{service_name}.{api_name}" for service_name, api_name in project.api_topological_order}
+        completed_apis = set()
+        
+        # Track theorem submission status for each API
+        theorem_status: Dict[str, List[bool]] = {}
+        for api_key in pending_apis:
+            service_name, api_name = api_key.split(".")
+            api = project.get_api(service_name, api_name)
+            if api and api.theorems:
+                theorem_status[api_key] = [False] * len(api.theorems)
+
+        # Queue for ready-to-prove theorems
+        theorem_queue: List[Tuple[Service, APIFunction, APITheorem, int]] = []
+
+        # Create semaphore to limit concurrent tasks
+        sem = asyncio.Semaphore(max_workers)
+
+        async def process_theorem(service: Service, api: APIFunction, 
+                                theorem: APITheorem, theorem_id: int,
+                                examples: List[LeanTheoremFile]) -> None:
+            """Process a single theorem"""
+            if logger:
+                logger.info(f"Processing theorem {theorem_id} for API: {api.name}")
+            
+            await self.prove_theorem(
+                project=project,
+                service=service,
+                api=api,
+                theorem=theorem,
+                theorem_id=theorem_id,
+                examples=examples,
+                negative=negative,
+                logger=logger
+            )
+
+        async def process_with_semaphore(task_tuple: Tuple, examples: List[LeanTheoremFile]):
+            service, api, theorem, theorem_id = task_tuple
+            async with sem:
+                await process_theorem(service, api, theorem, theorem_id, examples)
+
+        while pending_apis or theorem_queue:
+            # Find APIs whose dependencies are all completed
+            ready_apis = set()
+            for api_key in pending_apis:
+                service_name, api_name = api_key.split(".")
+                api = project.get_api(service_name, api_name)
+                if not api:
+                    continue
+                    
+                deps_completed = all(f"{dep_service}.{dep_api}" in completed_apis 
+                                   for dep_service, dep_api in api.dependencies.apis)
+                if deps_completed:
+                    ready_apis.add(api_key)
+
+            # Add theorems from ready APIs to queue
+            for api_key in ready_apis:
+                service_name, api_name = api_key.split(".")
+                service = project.get_service(service_name)
+                api = project.get_api(service_name, api_name)
+                if not service or not api or not api.theorems:
+                    continue
+
+                for theorem_id, theorem in enumerate(api.theorems):
+                    # Check if theorem needs proving
+                    if negative:
+                        if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
+                            theorem_status[api_key][theorem_id] = True
+                            continue
+                    else:
+                        if not theorem.theorem or theorem.theorem.theorem_proved:
+                            theorem_status[api_key][theorem_id] = True
+                            continue
+                            
+                    theorem_queue.append((service, api, theorem, theorem_id))
+
+            # Update pending APIs set
+            pending_apis -= ready_apis
+
+            if not theorem_queue:
+                if not pending_apis:
+                    break
+                continue
+
+            # Collect fresh examples for this batch
+            examples = self._collect_examples(project, self.max_examples, negative=negative)
+            if logger:
+                logger.info(f"Collected {len(examples)} proof examples for next batch")
+
+            # Create tasks for next batch of theorems
+            tasks = []
+            while len(tasks) < max_workers and theorem_queue:
+                task_tuple = theorem_queue.pop(0)
+                service, api, theorem, theorem_id = task_tuple
+                tasks.append(process_with_semaphore(task_tuple, examples))
+                # Mark theorem as submitted
+                api_key = f"{service.name}.{api.name}"
+                theorem_status[api_key][theorem_id] = True
+
+            # Process batch of theorems
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Check for completed APIs
+            newly_completed = set()
+            for api_key, status in theorem_status.items():
+                if all(status) and api_key not in completed_apis:
+                    newly_completed.add(api_key)
+                    if logger:
+                        logger.info(f"Completed all theorems for API: {api_key}")
+
+            completed_apis.update(newly_completed)
+
+        return project
 
     async def prove(self,
                    project: ProjectStructure,
                    negative: bool = False,
-                   logger: Optional[Logger] = None) -> ProjectStructure:
+                   logger: Optional[Logger] = None,
+                   max_workers: int = 1) -> ProjectStructure:
         """Prove all API theorems in the project"""
         if logger:
             theorem_type = "negative" if negative else "positive"
             logger.info(f"Proving API {theorem_type} theorems for project: {project.name}")
             
+        if not project.api_topological_order:
+            if logger:
+                logger.warning("No API topological order available, skipping proving")
+            return project
+
+        if max_workers > 1:
+            return await self._prove_parallel(project, negative, logger, max_workers)
+
+        # Original sequential logic
         for global_attempt in range(self.max_global_attempts):
             if logger:
                 logger.info(f"Global attempt {global_attempt + 1}/{self.max_global_attempts}")
