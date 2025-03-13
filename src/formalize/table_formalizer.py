@@ -60,7 +60,7 @@ Step-by-step reasoning of your formalization approach
 ### Output
 ```json
 {{
-  "imports": "string of import statements and open commands",
+  "imports": "string of import statements and open commands, can be empty string if no dependencies",
   "structure_definition": "string of structure definitions"
 }}
 ```
@@ -182,8 +182,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 
             # Parse response
             try:
-                lean_code = response.split("### Lean Code\n```lean")[-1].split("```")[0].strip()
-                json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()
+                json_str = response.split("```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)
             except Exception as e:
                 if logger:

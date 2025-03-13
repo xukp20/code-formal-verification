@@ -231,10 +231,18 @@ def main():
     parser.add_argument("--max-workers", type=int, default=1,
                       help="Maximum number of parallel workers")
     
+    # Random seed
+    parser.add_argument("--random-seed", type=int, default=None,
+                      help="Random seed for reproducibility")
+    
     args = parser.parse_args()
     
     if args.start_state and not args.continue_from:
         parser.error("--start-state requires --continue")
+
+    if args.random_seed:
+        import random
+        random.seed(args.random_seed)
 
     pipeline = FormalizationPipeline(
         project_name=args.project_name,

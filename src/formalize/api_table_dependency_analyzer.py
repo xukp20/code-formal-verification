@@ -115,7 +115,7 @@ Important:
         
         # Extract JSON from response
         try:
-            json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()
+            json_str = response.split("```json")[-1].split("```")[0].strip()
             dependencies = json.loads(json_str)
         except Exception as e:
             raise ValueError(f"Failed to parse LLM response as JSON for API {api.name}: {e}")

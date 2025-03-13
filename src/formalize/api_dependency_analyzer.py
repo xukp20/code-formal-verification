@@ -37,6 +37,7 @@ Important:
 - APIs must exist in the provided API list
 - Return an empty array if no APIs are called
 - Order doesn't matter
+- The current API itself is not a dependency and should not be included in the output
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 

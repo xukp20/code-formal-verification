@@ -140,9 +140,6 @@ Step-by-step reasoning of your fixes and proof strategy
 2. Current Theorem to prove
 {lean_file}
 
-Note:
-- Remember to add comments before each tactic you use so that you will think more carefully before using each tactic.
-
 3. Hints and examples
 
 Hints:
@@ -186,7 +183,7 @@ Please prove the given theorem.
 ### Unsolved goals after the valid part
 {unsolved_goals}
 
-### Hints and examples
+3. Hints and examples
 
 Hints:
 1. If you see "unknown tactic", check tactic name and required imports

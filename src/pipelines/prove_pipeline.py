@@ -260,6 +260,10 @@ def main():
     parser.add_argument("--max-workers", type=int, default=1,
                       help="Maximum number of parallel workers")
     
+    # Random seed
+    parser.add_argument("--random-seed", type=int, default=None,
+                      help="Random seed for reproducibility")
+    
     args = parser.parse_args()
     
     if args.start_state and not args.continue_from:
@@ -268,6 +272,10 @@ def main():
     # Set default theorem output path if not provided
     if not args.theorem_output_path:
         args.theorem_output_path = f"{args.output_base_path}/{args.project_name}/theorem_generation/completed.json"
+
+    if args.random_seed:
+        import random
+        random.seed(args.random_seed)   
 
     pipeline = ProvePipeline(
         project_name=args.project_name,

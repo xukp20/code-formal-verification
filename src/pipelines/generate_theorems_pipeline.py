@@ -210,10 +210,18 @@ def main():
                       choices=[s.name for s in TheoremGenerationState],
                       help="Start from specific state (requires --continue)")
     
+    # Random seed
+    parser.add_argument("--random-seed", type=int, default=None,
+                      help="Random seed for reproducibility")
+    
     args = parser.parse_args()
     
     if args.start_state and not args.continue_from:
         parser.error("--start-state requires --continue")
+
+    if args.random_seed:
+        import random
+        random.seed(args.random_seed)
 
     # Set default formalize output path if not provided
     if not args.formalize_output_path:

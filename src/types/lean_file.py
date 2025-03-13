@@ -79,11 +79,11 @@ class LeanFile:
         
         # Add each field with comment
         for field_name, field_value in fields.items():
-            if field_name != "imports":
+            if field_name != "imports" and field_name != "relative_path" and field_name != "_backup":
                 content.extend([
                     f"-- {field_name}",
                     field_value,
-                    ""  # Empty line after each field
+                    "\n"  # Empty line after each field
                 ])
 
         # Add end namespace
@@ -155,6 +155,7 @@ class LeanFunctionFile(LeanFile):
     @staticmethod
     def get_structure() -> str:
         return """
+```lean
 -- imports
 <imports needed, including import and open commands of other files>
 
@@ -171,6 +172,7 @@ def mainFunction (x : Type) : Type :=
 
 -- end namespace
 end <current file path>  -- This is automatically generated
+```
 """
 
 @dataclass 
@@ -183,6 +185,7 @@ class LeanStructureFile(LeanFile):
     @staticmethod
     def get_structure() -> str:
         return """
+```lean
 -- imports
 <imports needed, including import and open commands of other files>
 
@@ -200,6 +203,7 @@ structure MyStructure where
 
 -- end namespace
 end <current file path>  -- This is automatically generated
+```
 """
 
 @dataclass
@@ -215,6 +219,7 @@ class LeanTheoremFile(LeanFile):
     @staticmethod
     def get_structure(proved: bool = True) -> str:
         base = """
+```lean
 -- imports
 <imports needed, including import and open commands of other files>
 
@@ -236,6 +241,7 @@ theorem myTheorem (x : Type) : Type := by
 
 -- end namespace
 end <current file path>  -- This is automatically generated
+```
 """
         else:
             base += """
@@ -245,6 +251,7 @@ theorem myTheorem (x : Type) : Type := by
 
 -- end namespace
 end <current file path>  -- This is automatically generated
+```
 """ 
         return base
 

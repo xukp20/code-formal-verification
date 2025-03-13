@@ -15,23 +15,21 @@ export PACKAGE_PATH=".cache/packages"
 mkdir -p outputs
 mkdir -p lean_project
 
-# model="qwen-max-latest"
+model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
 # model="deepseek-r1"
 # model="qwq-32b"
-model="doubao-pro"
+# model="doubao-pro"
 
-# prover_model="deepseek-r1"
-prover_model="doubao-pro"
+prover_model="deepseek-r1"
+# prover_model="doubao-pro"
 
 add_mathlib=false
 
 
-# project_name="UserAuthenticationProject11"
-# project_name="BankAccountv1"    # v1: error in authorization
-project_name="BankAccount"     # v0: correct
+project_name="BankAccount"
 
 project_base_path="source_code"
 lean_base_path="lean_project"
@@ -49,6 +47,8 @@ max_global_attempts=4
 max_examples=3
 
 max_workers=8
+
+random_seed=1234
 
 # continue=true
 # start_state="API_THEOREMS"
@@ -77,8 +77,20 @@ elif [ "$task" == "theorem_generate" ]; then
 --project-base-path $project_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model \
---max-workers $max_workers"
+--model $model"
+
+    if [ "$add_mathlib" == "true" ]; then
+        command="$command --add-mathlib"
+    fi
+elif [ "$task" == "theorem_generate" ]; then
+    command="python src/pipelines/generate_theorems_pipeline.py \
+--project-name $project_name \
+--output-base-path $output_base_path \
+--doc-path $doc_path \
+--project-base-path $project_base_path \
+--log-level $log_level \
+--log-model-io \
+--model $model"
 
 elif [ "$task" == "prove" ]; then
     command="python src/pipelines/prove_pipeline.py \
@@ -90,13 +102,15 @@ elif [ "$task" == "prove" ]; then
 --prover-model $prover_model \
 --max-theorem-retries $max_theorem_retries \
 --max-global-attempts $max_global_attempts \
---max-examples $max_examples \
---max-workers $max_workers"
+--max-examples $max_examples"
 
 else
     echo "Invalid task"
     exit 1
 fi
+
+command="$command --random-seed $random_seed \
+ --max-workers $max_workers"
 
 if [ "$continue" == "true" ]; then
     command="$command --continue"

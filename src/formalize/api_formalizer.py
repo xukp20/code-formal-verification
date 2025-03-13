@@ -61,6 +61,7 @@ Convert the given API implementation into Lean 4 code following these requiremen
         - For example, the current API A use table X, and calls API B that use table Y, you should import and open both X and Y, and A is defined with two table parameters like (old_x_table: XTable, old_y_table: YTable), and you should return the updated tables as outputs.
     - If the required table of the dependent API is already formalized as a input/output pair, just use that for the input parameter and remember to update the table after the dependent API call.
    - Check the return type of the dependent API, to handle each part and each situation correctly.
+    - The original code may return the error returned from the dependent API directly, so you need to look at each type that may be returned from the dependent API and handle them correctly. If the original code just return the error type, you need to add that error type to the result type of the current API too.
    - *Possible simplification*: Since we are trying to formalize the current API instead of the dependent API, you are allowed to simplify the call to APIs that are read-only, by ignoring the returned tables from the dependent API and use the old table for the future operations.
     - This can only be used when you are sure the dependent API is read-only, which means it doesn't change any tables.
     - If so, you can write the function call like this:
@@ -84,13 +85,15 @@ Convert the given API implementation into Lean 4 code following these requiremen
        | Error : <api_name>Result
      ```
    - Name the result type as <api_name>Result like UserLoginResult, BalanceQueryResult, etc.
-   - Use these types to represent success/failure states
    - *Important*: Please distinguish different types of returns, including the response type and the message string to define each of them as a different result type
     - Every different type and different message should be a different result type, so that we can distinguish them in the result type
     - Don't just use a single Error type to represent all the errors, because we need to check if the error is expected or not too
    - We don't keep the raw string in the result type, just use types to represent different results
    - *Important*: The exceptions raised in the code is just a type of the API response, so you should never use panic! to handle them, instead you should use the result type to represent the different results
    - Make sure you return the correct result type when error occurs, by checking that all the branches of the result type are covered.
+    - Don't just put some comment beside the code, you must return the correct result type all the way from where it is created to the return of the main function.
+   - Go through all the code of the main function and the helper functions to collect all the possible error types and messages.
+   - Results with same type and message but returned from different functions are still the same result type, so be sure to merge them.
    - Return values directly without IO wrapper
 
 5. Return Types:
@@ -109,7 +112,7 @@ Convert the given API implementation into Lean 4 code following these requiremen
 
 7. Code Structure
    - Keep the original code organization
-   - Create helper functions matching internal methods
+   - Create helper functions matching internal methods, and keep the return types of the helper functions as much as possible (except for IO wrapper, db operations and add returned error types that are raised as exceptions in the original code)
    - Use meaningful names for all functions
    - Maintain the same function hierarchy
    - Example:
@@ -129,6 +132,18 @@ Return your response in three parts:
 
 ### Analysis
 Step-by-step reasoning of your formalization approach
+Including:
+- What to import and opens. Be aware that the imports must be in the front of the file and the open commands should be after them
+- Go through return types of the dependent APIs and raised errors and returned types of helper functions and main function in the current file and collect all the possible error types and messages to define the result type
+- Make sure every return type can be returned from some branch of the code
+- Analyze Database operations and determine how to formalize them
+- Analyze dependent API calls and look for query type APIs and simplify the returned tables if possible
+- Design the structure and the content of the helper functions and the main function
+- Write the final code
+    - Put imports and open commands in the imports part
+    - Put the type definitions and helper functions in the helper_functions part
+    - Put the main function in the main_function part
+
 
 (Use ```lean and ``` to wrap the code, not ```lean4!)
 ### Lean Code
@@ -139,8 +154,8 @@ Step-by-step reasoning of your formalization approach
 ### Output
 ```json
 {{
-  "imports": "string of import statements and open commands",
-  "helper_functions": "string of helper function definitions or type definitions",
+  "imports": "string of import statements and open commands, remember to import and open the table structure file you need to use",
+  "helper_functions": "string of type definitions and helper function definitions ",
   "main_function": "string of main function definition"
 }}
 ```
@@ -161,6 +176,8 @@ Return both the corrected code and parsed fields.
 Hints:
 - Remember to add open commands to your imports to open the imported namespace after imports, these open commands should be in the imports field of the json
 - All the newly defined helper functions and types should be in the helper_functions field of the json
+- Add comments to the code in English
+- Make sure the content in the Json object is directly copied from the Lean Code part, and make no omission like the comments, the helper functions, etc.
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
@@ -197,7 +214,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                     continue
                 lines.extend([
                     api.to_markdown(show_fields={
-                        # "planner_code": True, 
+                        "planner_code": True, 
                         # "message_code": True, 
                         "lean_function": True
                     })
@@ -226,6 +243,8 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             "2. The formalized code should be semantically equivalent to the original code, in the level of each function or each line of code",
             "3. You can add some comments to explain the code, but don't add too many comments, only add comments to the key steps and important parts.",
             "4. I take the final output only from the Json part, so make sure to put everything in the Lean file into those fields and make no omission.",
+            "5. Make sure the content in the Json object is directly copied from the Lean Code part, and make no omission like the comments, the helper functions, etc.",
+            "6. Add comments to the code in English",
             "Make sure you have '### Output\n```json' in your response so that I can find the Json easily."
         ]
         return "\n".join(parts)
@@ -325,8 +344,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 
             # Parse response
             try:
-                lean_code = response.split("### Lean Code\n```lean")[-1].split("```")[0].strip()
-                json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()
+                json_str = response.split("```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)
                 
             except Exception as e:

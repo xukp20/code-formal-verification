@@ -15,13 +15,13 @@ export PACKAGE_PATH=".cache/packages"
 mkdir -p outputs
 mkdir -p lean_project
 
-# model="qwen-max-latest"
+model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
 # model="deepseek-r1"
 # model="qwq-32b"
-model="doubao-pro"
+# model="doubao-pro"
 
 # prover_model="deepseek-r1"
 prover_model="doubao-pro"
@@ -30,8 +30,9 @@ prover_model="doubao-pro"
 add_mathlib=false
 
 
-project_name="UserAuthenticationProjectvp"
-# project_name="BankAccount8"
+# project_name="UserAuthentication"
+project_name="UserAuthenticationV1"
+# project_name="BankAccount"
 
 project_base_path="source_code"
 lean_base_path="lean_project"
@@ -40,15 +41,17 @@ doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="DEBUG"
 
-# task="formalize"
+task="formalize"
 # task="theorem_generate"
-task="prove"
+# task="prove"
 
 max_theorem_retries=5
 max_global_attempts=4
 max_examples=3
 
 max_workers=8
+
+random_seed=1234
 
 # continue=true
 # start_state="API_THEOREMS"
@@ -65,8 +68,7 @@ if [ "$task" == "formalize" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model \
---max-workers $max_workers"
+--model $model"
 
     if [ "$add_mathlib" == "true" ]; then
         command="$command --add-mathlib"
@@ -79,8 +81,7 @@ elif [ "$task" == "theorem_generate" ]; then
 --project-base-path $project_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model \
---max-workers $max_workers"
+--model $model"
 
 elif [ "$task" == "prove" ]; then
     command="python src/pipelines/prove_pipeline.py \
@@ -92,13 +93,15 @@ elif [ "$task" == "prove" ]; then
 --prover-model $prover_model \
 --max-theorem-retries $max_theorem_retries \
 --max-global-attempts $max_global_attempts \
---max-examples $max_examples \
---max-workers $max_workers"
+--max-examples $max_examples"
 
 else
     echo "Invalid task"
     exit 1
 fi
+
+command="$command --random-seed $random_seed \
+ --max-workers $max_workers"
 
 if [ "$continue" == "true" ]; then
     command="$command --continue"
