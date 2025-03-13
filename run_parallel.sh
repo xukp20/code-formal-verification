@@ -15,14 +15,17 @@ export PACKAGE_PATH=".cache/packages"
 mkdir -p outputs
 mkdir -p lean_project
 
-model="qwen-max-latest"
+# model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
 # model="deepseek-r1"
 # model="qwq-32b"
+model="doubao-pro"
 
-prover_model="deepseek-r1"
+# prover_model="deepseek-r1"
+prover_model="doubao-pro"
+
 
 add_mathlib=false
 
@@ -45,7 +48,7 @@ max_theorem_retries=5
 max_global_attempts=4
 max_examples=3
 
-max_workers=4
+max_workers=8
 
 # continue=true
 # start_state="API_THEOREMS"

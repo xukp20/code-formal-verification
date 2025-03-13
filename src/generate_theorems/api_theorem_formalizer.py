@@ -13,6 +13,8 @@ class APITheoremFormalizer:
     
     ROLE_PROMPT = """You are a theorem formalizer for Lean 4 code, specializing in converting API requirements into formal theorems. You excel at creating precise mathematical representations of API behaviors while maintaining semantic correctness."""
 
+#    - If you believe the helper function from the API file that you want to use is easy and clear enough so that it is correct and need no more proof, you can import and use it.
+#    - Or else you should define the helper function in the theorem file.
 
     SYSTEM_PROMPT = """Background:
 We need to formalize API requirements into Lean 4 theorems that verify API behavior.
@@ -41,8 +43,8 @@ File Structure Requirements:
      ```
 
 2. Helper Functions:
-   - If you believe the helper function from the API file that you want to use is easy and clear enough so that it is correct and need no more proof, you can import and use it.
-   - Or else you should define the helper function in the theorem file.
+   - Try to use existing helper functions in the API file as much as possible
+   - Add new helper functions only if none of the existing ones can do the same job or you don't trust the existing ones to be correct
    - Keep functions small and focused
    - New type definitions should be in the helper_functions field of the file too, if needed
    - Example:
@@ -83,10 +85,8 @@ File Structure Requirements:
         - For example:
             - If you need to show a new record is added, you can check: table.rows.any (fun row => row.phone_number == phoneNumber ∧ row.password = password)
             - If you need to show a record is not in the table, you can check: ¬ table.rows.any (fun row => row.phone_number == phoneNumber ∧ row.password = password)
-            - If you need to show a record is modified, you can check the old one does not exist in the new table and the new one exists in the new table
 
      - Try not to check all the records of the table one by one, if you have to, make sure the order of the records is the same as the returned table of the API.
-        - For example, rows ++ [row'] is not the same as [row'] ++ rows in Lean, but it is the same in the real table, so you need to use the same order in the theorem as the order in returned table of the API
         - Order of records: Since in the structure of the Table we use a list of records to represent the table content which is actually a set, you should always add the new record to the end of the list if needed.
         - Which means you should always use rows ++ [row'] instead of [row'] ++ rows in the theorem if the returned table has some new records appended to the original table.
     

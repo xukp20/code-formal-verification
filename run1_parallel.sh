@@ -15,14 +15,16 @@ export PACKAGE_PATH=".cache/packages"
 mkdir -p outputs
 mkdir -p lean_project
 
-model="qwen-max-latest"
+# model="qwen-max-latest"
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
 # model="deepseek-r1"
 # model="qwq-32b"
+model="doubao-pro"
 
-prover_model="deepseek-r1"
+# prover_model="deepseek-r1"
+prover_model="doubao-pro"
 
 add_mathlib=false
 
@@ -46,6 +48,8 @@ max_theorem_retries=5
 max_global_attempts=4
 max_examples=3
 
+max_workers=8
+
 # continue=true
 # start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
@@ -59,7 +63,8 @@ if [ "$task" == "formalize" ]; then
 --output-base-path $output_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model"
+--model $model \
+--max-workers $max_workers"
 
     if [ "$add_mathlib" == "true" ]; then
         command="$command --add-mathlib"
@@ -72,7 +77,8 @@ elif [ "$task" == "theorem_generate" ]; then
 --project-base-path $project_base_path \
 --log-level $log_level \
 --log-model-io \
---model $model"
+--model $model \
+--max-workers $max_workers"
 
 elif [ "$task" == "prove" ]; then
     command="python src/pipelines/prove_pipeline.py \
@@ -84,7 +90,8 @@ elif [ "$task" == "prove" ]; then
 --prover-model $prover_model \
 --max-theorem-retries $max_theorem_retries \
 --max-global-attempts $max_global_attempts \
---max-examples $max_examples"
+--max-examples $max_examples \
+--max-workers $max_workers"
 
 else
     echo "Invalid task"
