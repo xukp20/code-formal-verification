@@ -12,7 +12,7 @@ from src.utils.apis.langchain_client import _call_openai_completion_async
 class APITheoremProver:
     """Prove API theorems in Lean 4"""
     
-    ROLE_PROMPT = """You are a formal verification expert tasked with proving theorems about formalized APIs in Lean 4. You excel at constructing rigorous mathematical proofs while maintaining clarity and correctness."""
+    ROLE_PROMPT = """You are a formal verification expert tasked with proving theorems about formalized APIs in Lean 4. You excel at constructing rigorous mathematical proofs while maintaining clarity and correctness. When you notice potential formalization issues, you can provide warnings while still attempting to prove the theorem."""
 
     SYSTEM_PROMPT = """Background:
 We need to prove theorems about API behavior in Lean 4. Each theorem verifies a specific property of an API.
@@ -520,118 +520,158 @@ theorem userLoginSuccessWhenCredentialsMatch
             theorem_type = "negative" if negative else "positive"
             logger.info(f"Proving API {theorem_type} theorems in parallel for project: {project.name}")
 
-        # Initialize tracking structures - convert [service_name, api_name] to "service_name.api_name"
-        pending_apis = {f"{service_name}.{api_name}" for service_name, api_name in project.api_topological_order}
-        completed_apis = set()
-        
-        # Track theorem submission status for each API
-        theorem_status: Dict[str, List[bool]] = {}
-        for api_key in pending_apis:
-            service_name, api_name = api_key.split(".")
-            api = project.get_api(service_name, api_name)
-            if api and api.theorems:
-                theorem_status[api_key] = [False] * len(api.theorems)
-
-        # Queue for ready-to-prove theorems
-        theorem_queue: List[Tuple[Service, APIFunction, APITheorem, int]] = []
-
-        # Create semaphore to limit concurrent tasks
-        sem = asyncio.Semaphore(max_workers)
-
-        async def process_theorem(service: Service, api: APIFunction, 
-                                theorem: APITheorem, theorem_id: int,
-                                examples: List[LeanTheoremFile]) -> None:
-            """Process a single theorem"""
+        for global_attempt in range(self.max_global_attempts):
             if logger:
-                logger.info(f"Processing theorem {theorem_id} for API: {api.name}")
+                logger.info(f"Global attempt {global_attempt + 1}/{self.max_global_attempts}")
+
+            # Initialize tracking structures
+            pending_apis = {f"{service_name}.{api_name}" for service_name, api_name in project.api_topological_order}
+            completed_apis = set()
             
-            await self.prove_theorem(
-                project=project,
-                service=service,
-                api=api,
-                theorem=theorem,
-                theorem_id=theorem_id,
-                examples=examples,
-                negative=negative,
-                logger=logger
-            )
-
-        async def process_with_semaphore(task_tuple: Tuple, examples: List[LeanTheoremFile]):
-            service, api, theorem, theorem_id = task_tuple
-            async with sem:
-                await process_theorem(service, api, theorem, theorem_id, examples)
-
-        while pending_apis or theorem_queue:
-            # Find APIs whose dependencies are all completed
-            ready_apis = set()
+            # Track theorem submission status for each API
+            theorem_status: Dict[str, List[bool]] = {}
+            unproved_count = 0
+            
+            # Initialize theorem status and count unproved theorems
             for api_key in pending_apis:
                 service_name, api_name = api_key.split(".")
                 api = project.get_api(service_name, api_name)
-                if not api:
-                    continue
-                    
-                deps_completed = all(f"{dep_service}.{dep_api}" in completed_apis 
-                                   for dep_service, dep_api in api.dependencies.apis)
-                if deps_completed:
-                    ready_apis.add(api_key)
+                if api and api.theorems:
+                    status = []
+                    for theorem in api.theorems:
+                        if negative:
+                            is_proved = (not theorem.theorem_negative) or theorem.theorem_negative.theorem_proved
+                        else:
+                            is_proved = (not theorem.theorem) or theorem.theorem.theorem_proved
+                        status.append(is_proved)
+                        if not is_proved:
+                            unproved_count += 1
+                    theorem_status[api_key] = status
 
-            # Add theorems from ready APIs to queue
-            for api_key in ready_apis:
-                service_name, api_name = api_key.split(".")
-                service = project.get_service(service_name)
-                api = project.get_api(service_name, api_name)
-                if not service or not api or not api.theorems:
-                    continue
+            if unproved_count == 0:
+                if logger:
+                    logger.info("All theorems already proved")
+                break
 
-                for theorem_id, theorem in enumerate(api.theorems):
-                    # Check if theorem needs proving
-                    if negative:
-                        if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
-                            theorem_status[api_key][theorem_id] = True
-                            continue
-                    else:
-                        if not theorem.theorem or theorem.theorem.theorem_proved:
-                            theorem_status[api_key][theorem_id] = True
+            if logger:
+                logger.info(f"{unproved_count} theorems remain unproved")
+
+            # Queue for ready-to-prove theorems
+            theorem_queue: List[Tuple[Service, APIFunction, APITheorem, int]] = []
+
+            # Create semaphore to limit concurrent tasks
+            sem = asyncio.Semaphore(max_workers)
+
+            async def process_theorem(service: Service, api: APIFunction, 
+                                    theorem: APITheorem, theorem_id: int,
+                                    examples: List[LeanTheoremFile]) -> None:
+                """Process a single theorem"""
+                if logger:
+                    logger.info(f"Processing theorem {theorem_id} for API: {api.name}")
+                
+                await self.prove_theorem(
+                    project=project,
+                    service=service,
+                    api=api,
+                    theorem=theorem,
+                    theorem_id=theorem_id,
+                    examples=examples,
+                    negative=negative,
+                    logger=logger
+                )
+
+            async def process_with_semaphore(task_tuple: Tuple, examples: List[LeanTheoremFile]):
+                service, api, theorem, theorem_id = task_tuple
+                async with sem:
+                    await process_theorem(service, api, theorem, theorem_id, examples)
+
+            while pending_apis or theorem_queue:
+                # Find APIs whose dependencies are all completed
+                ready_apis = set()
+                for api_key in pending_apis:
+                    service_name, api_name = api_key.split(".")
+                    api = project.get_api(service_name, api_name)
+                    if not api:
+                        continue
+                        
+                    deps_completed = all(f"{dep_service}.{dep_api}" in completed_apis 
+                                       for dep_service, dep_api in api.dependencies.apis)
+                    if deps_completed:
+                        ready_apis.add(api_key)
+
+                # Add theorems from ready APIs to queue
+                for api_key in ready_apis:
+                    service_name, api_name = api_key.split(".")
+                    service = project.get_service(service_name)
+                    api = project.get_api(service_name, api_name)
+                    if not service or not api or not api.theorems:
+                        continue
+
+                    for theorem_id, theorem in enumerate(api.theorems):
+                        # Skip if theorem is already proved
+                        if theorem_status[api_key][theorem_id]:
                             continue
                             
-                    theorem_queue.append((service, api, theorem, theorem_id))
+                        theorem_queue.append((service, api, theorem, theorem_id))
 
-            # Update pending APIs set
-            pending_apis -= ready_apis
+                # Update pending APIs set
+                pending_apis -= ready_apis
 
-            if not theorem_queue:
-                if not pending_apis:
-                    break
-                continue
+                if not theorem_queue:
+                    if not pending_apis:
+                        break
+                    continue
 
-            # Collect fresh examples for this batch
-            examples = self._collect_examples(project, self.max_examples, negative=negative)
+                # Collect fresh examples for this batch
+                examples = self._collect_examples(project, self.max_examples, negative=negative)
+                if logger:
+                    logger.info(f"Collected {len(examples)} proof examples for next batch")
+
+                # Create tasks for next batch of theorems
+                tasks = []
+                while len(tasks) < max_workers and theorem_queue:
+                    task_tuple = theorem_queue.pop(0)
+                    service, api, theorem, theorem_id = task_tuple
+                    tasks.append(process_with_semaphore(task_tuple, examples))
+                    # Mark theorem as submitted
+                    api_key = f"{service.name}.{api.name}"
+                    theorem_status[api_key][theorem_id] = True
+
+                # Process batch of theorems
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Check for completed APIs
+                newly_completed = set()
+                for api_key, status in theorem_status.items():
+                    if all(status) and api_key not in completed_apis:
+                        newly_completed.add(api_key)
+                        if logger:
+                            logger.info(f"Completed all theorems for API: {api_key}")
+
+                completed_apis.update(newly_completed)
+
+            # Check if all theorems are proved after this attempt
+            unproved_count = 0
+            for api_key in theorem_status:
+                service_name, api_name = api_key.split(".")
+                api = project.get_api(service_name, api_name)
+                if api and api.theorems:
+                    for theorem_id, theorem in enumerate(api.theorems):
+                        if negative:
+                            is_proved = (not theorem.theorem_negative) or theorem.theorem_negative.theorem_proved
+                        else:
+                            is_proved = (not theorem.theorem) or theorem.theorem.theorem_proved
+                        if not is_proved:
+                            unproved_count += 1
+
+            if unproved_count == 0:
+                if logger:
+                    logger.info("All theorems proved successfully")
+                break
+                
             if logger:
-                logger.info(f"Collected {len(examples)} proof examples for next batch")
-
-            # Create tasks for next batch of theorems
-            tasks = []
-            while len(tasks) < max_workers and theorem_queue:
-                task_tuple = theorem_queue.pop(0)
-                service, api, theorem, theorem_id = task_tuple
-                tasks.append(process_with_semaphore(task_tuple, examples))
-                # Mark theorem as submitted
-                api_key = f"{service.name}.{api.name}"
-                theorem_status[api_key][theorem_id] = True
-
-            # Process batch of theorems
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Check for completed APIs
-            newly_completed = set()
-            for api_key, status in theorem_status.items():
-                if all(status) and api_key not in completed_apis:
-                    newly_completed.add(api_key)
-                    if logger:
-                        logger.info(f"Completed all theorems for API: {api_key}")
-
-            completed_apis.update(newly_completed)
+                logger.info(f"{unproved_count} theorems remain unproved after attempt {global_attempt + 1}")
 
         return project
 

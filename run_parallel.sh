@@ -23,15 +23,17 @@ model="qwen-max-latest"
 # model="qwq-32b"
 # model="doubao-pro"
 
-# prover_model="deepseek-r1"
-prover_model="doubao-pro"
+prover_model="deepseek-r1"
+# prover_model="doubao-pro"
 
 
 add_mathlib=false
 
 
 # project_name="UserAuthentication"
-project_name="UserAuthenticationV1"
+# project_name="UserAuthenticationV1"
+project_name="UserAuthenticationV2"
+
 # project_name="BankAccount"
 
 project_base_path="source_code"
@@ -39,22 +41,23 @@ lean_base_path="lean_project"
 output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
 
-log_level="DEBUG"
+log_level="INFO"
+# log_level="DEBUG"
 
-task="formalize"
-# task="theorem_generate"
+# task="formalize"
+task="theorem_generate"
 # task="prove"
 
 max_theorem_retries=5
-max_global_attempts=4
+max_global_attempts=3
 max_examples=3
 
 max_workers=8
 
 random_seed=1234
 
-# continue=true
-# start_state="API_THEOREMS"
+continue=true
+start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
 # start_state="TABLE_THEOREMS"
 # start_state="API_NEGATIVE_GENERATION"

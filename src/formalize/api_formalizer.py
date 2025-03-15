@@ -14,6 +14,16 @@ class APIFormalizer:
     
     ROLE_PROMPT = """You are a formal verification expert specializing in translating APIs into Lean 4 code. You excel at creating precise mathematical representations of API operations while maintaining their semantics and dependencies."""
 
+    REFERENCE_DB_API_DECLARATIONS = """
+## Reference Database API Interface
+Here is the package implementation of the database APIs:
+```scala
+""" + DB_API_DECLARATIONS + """    
+```
+Note that this is the source code of scala that is for reference, there is not this file in the Lean Project. You should only look at it to understand the meaning of the database operations, but you can not import or use it in the Lean code.
+
+"""
+
     SYSTEM_PROMPT = """
 ## Background
 This software project uses multiple APIs with dependencies on tables and other APIs. You will formalize these APIs into Lean 4 code.
@@ -25,7 +35,7 @@ Now we need to formalize each API implementation into Lean 4 code.
 
 
 ## Task
-Convert the given API implementation into Lean 4 code following these requirements:
+Convert the given API implementation into Lean 4 code which has exactly same meaning as the original code following these requirements:
 
 ## Requirements
 1. Follow the exact file structure:
@@ -44,24 +54,23 @@ Convert the given API implementation into Lean 4 code following these requiremen
         return (UpdateResult.Success, new_user_table)
         ```
 
-   - You are given the scala code of the database APIs, but they should not be used in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.
+   - You are given the scala code of the database APIs before, but they are only for you to understand the usage of database in the scala code, and should not be used in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.
    
    - ! Keep the helper functions easy:
      - For the helper functions, if they don't change the table, you should not input and output the table parameters.
      - Only make sure every API has the related tables as parameters and return the updated tables as outputs.
    - Note that we need to check the correctness of the API, by examining both the output and the new table status, so in the current API and its helper functions, you MUST NOT ignore any updated table by assuming it is not changed.
-   - You should always take the updated tables from a helper function that uses the table or a dependent API to use it for the future operations until return it as the part of the return value.
-   
-   - Order of records: Since in the structure of the Table we use a list of records to represent the table content which is actually a set, you should always add the new record to the end of the list if needed.
+   - Order of records: Since in the structure of the table we use a list of records to represent the table content which is actually a set, you should always add the new record to the end of the list if needed.
 
 3. API dependencies:
-   - A call to another API is in the format of xxxMessage.send in the Planner code, and you should import and open the dependent API file and formalize the api call as a function call to that API which is already formalized.
+   - A call to another API is in the format of `xxxMessage.send` in the Planner code, and you should import and open the dependent API file and formalize the api call as a function call to that API which is already formalized.
    - If the formalized function of the dependent API has any table as an input, you should `import and open` that table file (which can be copied from the import part of the dependent API file), and then:
+    - You can use the short name for the table structure now in the definitions of the current API, like `XTable` or `YTable` instead of the full name like `xxx.yyy.ZTable`.
     - If the input table is not formalized as a input/output pair yet, you should add it to the input/output pair of the current API so that we can use the old table as the input parameter to the dependent API.
         - For example, the current API A use table X, and calls API B that use table Y, you should import and open both X and Y, and A is defined with two table parameters like (old_x_table: XTable, old_y_table: YTable), and you should return the updated tables as outputs.
     - If the required table of the dependent API is already formalized as a input/output pair, just use that for the input parameter and remember to update the table after the dependent API call.
    - Check the return type of the dependent API, to handle each part and each situation correctly.
-    - The original code may return the error returned from the dependent API directly, so you need to look at each type that may be returned from the dependent API and handle them correctly. If the original code just return the error type, you need to add that error type to the result type of the current API too.
+    - The original code may return the error returned from the dependent API directly, so you need to look at each type that may be returned from the dependent API and handle them correctly with match-case. If the original code just return the error type, you need to add that error type to the result type of the current API too.
    - *Possible simplification*: Since we are trying to formalize the current API instead of the dependent API, you are allowed to simplify the call to APIs that are read-only, by ignoring the returned tables from the dependent API and use the old table for the future operations.
     - This can only be used when you are sure the dependent API is read-only, which means it doesn't change any tables.
     - If so, you can write the function call like this:
@@ -81,19 +90,28 @@ Convert the given API implementation into Lean 4 code following these requiremen
      ```lean
      inductive <api_name>Result where
        | Success : <api_name>Result
-       | NotFound : <api_name>Result
-       | Error : <api_name>Result
+       | NotFoundFailure : <api_name>Result
+       | <SomeKindOfError>Error : <api_name>Result
      ```
    - Name the result type as <api_name>Result like UserLoginResult, BalanceQueryResult, etc.
    - *Important*: Please distinguish different types of returns, including the response type and the message string to define each of them as a different result type
     - Every different type and different message should be a different result type, so that we can distinguish them in the result type
     - Don't just use a single Error type to represent all the errors, because we need to check if the error is expected or not too
-   - We don't keep the raw string in the result type, just use types to represent different results
-   - *Important*: The exceptions raised in the code is just a type of the API response, so you should never use panic! to handle them, instead you should use the result type to represent the different results
+   - *Important*: We don't keep the error message string in the result type, just use types to represent different results
+   - If any value needs to be returned from the API, you should add it to the result type
+    - For example, if the API returns an int, you should add it to the result type like this:
+        ```lean
+        inductive <api_name>Result where
+          | Success : Int → <api_name>Result
+          | ...
+        ```
+        So that we can check if the API returns a correct value or not.
+   - *Important*: The exceptions raised in the code is just a type of the API response, so you should never use `panic!` to handle them (which will make the lean code crash), instead you should use the result type to represent the different results
    - Make sure you return the correct result type when error occurs, by checking that all the branches of the result type are covered.
     - Don't just put some comment beside the code, you must return the correct result type all the way from where it is created to the return of the main function.
    - Go through all the code of the main function and the helper functions to collect all the possible error types and messages.
    - Results with same type and message but returned from different functions are still the same result type, so be sure to merge them.
+   - Make sure every defined result type is used in the code and will be returned from some branch of the code. Don't define a result type that is not used like an abstract "Error" type.
    - Return values directly without IO wrapper
 
 5. Return Types:
@@ -102,11 +120,10 @@ Convert the given API implementation into Lean 4 code following these requiremen
 
 6. Implementation Fidelity:
    - !Top1 priority: The formalized code should be semantically equivalent to the original code, in the level of each line of code
+    - There maybe bugs in the original code, but you should not fix them, just translate the original code, because we just want to use the formalization to look for the bugs in the original code.
+    - Translate based on the code logic, not the comments. You can refer to the comments to understand the code, but if they are not consistent with the code logic, you should follow the code logic.
    - Base the formalization on the Planner code
-   - Maintain the same logical flow and operations
    - For the db operations, you may see raw SQL code, you should make sure the formalized code is semantically equivalent to the original code.
-        - Some interfaces are provided by the table formalization, you can use them directly.
-        - But if none of the interfaces are entirely the same as the sql code, you should write the logic of handling the table by yourself, remember the equivalence is always the top priority.
    - Except for the db operations, you should keep the original code structure and logic as much as possible, like the if-else structure, the match-case structure, etc.
    - Preserve error handling and validation logic
 
@@ -114,7 +131,6 @@ Convert the given API implementation into Lean 4 code following these requiremen
    - Keep the original code organization
    - Create helper functions matching internal methods, and keep the return types of the helper functions as much as possible (except for IO wrapper, db operations and add returned error types that are raised as exceptions in the original code)
    - Use meaningful names for all functions
-   - Maintain the same function hierarchy
    - Example:
      ```lean
      def validateInput (input: String) : Bool := ...
@@ -122,28 +138,135 @@ Convert the given API implementation into Lean 4 code following these requiremen
      ```
 
 8. Function Naming
-   - Try to use the same name as the original code
+   - Try to use the same name as the original code for the helper functions
    - The main function of the API should be named as the API name, but following the Lean 4 naming convention, like `userLogin` or `balanceQuery` or `userRegister`
    - Don't add `Message` or `Planner` in the function name, just the API name
 
-   
+9. Possible Bugs
+   - The target of our formalization is to find the bugs in the original code, so you should not fix the bugs in the original code, just translate the original code to keep that bug in the formalized code
+   - But you are provided with an optional output part title as "### Warning" to collect all the possible bugs you think there are in the original code
+   - So if you see any bugs in the original code, you should put them in the "### Warning" part, but still translate the original code to keep the bug in the formalized code
+
+
 ## Output
-Return your response in three parts:
 
 ### Analysis
-Step-by-step reasoning of your formalization approach
-Including:
-- What to import and opens. Be aware that the imports must be in the front of the file and the open commands should be after them
-- Go through return types of the dependent APIs and raised errors and returned types of helper functions and main function in the current file and collect all the possible error types and messages to define the result type
-- Make sure every return type can be returned from some branch of the code
-- Analyze Database operations and determine how to formalize them
-- Analyze dependent API calls and look for query type APIs and simplify the returned tables if possible
-- Design the structure and the content of the helper functions and the main function
+Step-by-step reasoning of your formalization approach following the structure below:
+
+#### Imports
+- Analyze what to import and opens based on the current file and the dependent APIs and tables
+- All the tables that the dependent APIs use should be imported and opened, you can find the imports and open commands in the dependent APIs' imports part. After that you can use the short name for the table structure.
+- Be aware that all the imports must be in the front of the file and all the open commands should be after them
+
+#### Return Types
+First list all the dependent APIs to analyze the return types of them to be handled in this API, like this:
+
+##### Dependent APIs
+For each of the dependent APIs, you need to:
+1. Look for all the returned type in the Lean file of the dependent API
+2. Find out where it is called and how the return type is handled
+- Note that if some exception is not handled, it will be kept as an exception returned by the current API, which should be added to the result type of the current API
+
+##### Helper Functions
+For each of the helper functions, you need to:
+1. Copy the content of the helper function for reference here
+2. Look for all the exceptions raised in the helper function, which will be an result type too.
+
+##### Main Function
+For the main function, you need to:
+1. Copy the content of the main function for reference here
+2. Look for all the exceptions raised in the main function, which will be an result type too.
+3. Look for success types and find out if there is any value returned from the API, if so, add it to the result type.
+4. Note that the info message is not a return value:
+    - For example, if all success gives a string "Success", you should not add a string "Success" to the success type.
+    - But if the success type return an int value for some actual meaning that should be different for different input params, you should add it to the success type.
+
+##### Collect all the result types
+1. List all the result types presented above, each as an item in the list
+2. For each one in the list, check that it is actually used in the code, which means it should be returned from some branch of the code or raised by a dependent API. If not, remove it from the list.
+3. Look for result types that are exactly the same, which means they have the same type (success, or type of the exceptions) and the same content (the return value, or the error message). If so, merge them into one result type.
+4. Note that the info message is not a return value:
+    - For example, if all success gives a string "Success", you should not add a string "Success" to the success type.
+    - But if the success type return an int value for some actual meaning that should be different for different input params, you should add it to the success type.
+5. Be careful with return types that has a string inside, there is a big chance that it is not a return value but an info message, so you should not add it to the success type.
+    - Examine all the return types with a string inside to figure out if it is a return value or an info message. If info message, just remove the string.
+
+##### Formalize the result type
+Present the Lean 4 code of the result type following the format below:
+```lean
+inductive <api_name>Result where
+  | Success : <api_name>Result
+  | ...
+```
+- We can assume that database operations are always successful, so you don't need to handle the error types of the database operations.
+- This part should be put in the helper_functions part
+-  Note that the info message is not a return value:
+    - For example, if all success gives a string "Success", you should not add a string "Success" to the success type.
+    - But if the success type return an int value for some actual meaning that should be different for different input params, you should add it to the success type.
+- Be careful with return types that has a string inside, there is a big chance that it is not a return value but an info message, so you should not add it to the success type.
+    - Examine all the return types with a string inside to figure out if it is a return value or an info message. If info message, just remove the string.
+
+#### Code Structure
+- Design the structure and the content of the helper functions and the main function following the original code structure
+- You should put a definition of the result type in the helper_functions part
+- You should put a list of helper functions in the helper_functions part
+- You should put the main function in the main_function part
+- Not other parts are needed in the helper_functions and main_function parts
+- Tables should be imported from their files
+- Don't add any functions related to raw SQL operations because they are wrapped in the database APIs and you just handle the structure of the tables in Lean 
+
+#### Helper Functions Details
+ - For this part, you need to first take out all the helper functions from the source code one by one.
+ - For each function taken, first repeat its content for reference, and then try to understand what its doing and how it is implemented.
+ - You may think there are some bugs in the original code, just point it out for future collection, then pay attention to it to make sure the formalized code is the same as the original code, which means the bug is still there in the formalized code
+ - After that, write the formalized code for this single function
+So for each of the helper functions, you need:
+##### <helper_function_name>
+1. Original Code
+```scala
+<original_code>
+```
+
+2. Analysis
+- What it does, by reading the code line by line
+- How it is implemented
+- Any potential bugs
+- What is the return type of the function: if any exception is raised, you can return a value which is align with the original code type together with a result type of the current API to handle the errors
+    - For example, if the original code returns a bool with some tables, you can return bool × <api_name>Result × AnyTable... if you need to handle possible errors raised in this function
+
+3. Formalized Code
+- Write the formalized code for this single function
+- Add comments to the Lean code in English, can be the same as the original code comments or some more detailed explanations
+```lean
+<formalized_code>
+```
+
+4. Analysis of the Formalized Code
+- Compare the formalized code with the original code, to make sure the formalized code is semantically equivalent to the original code
+- If not, rewrite the formalized code and analysis
+
+
+#### Main Function Details
+- For the main function, you need to:
+1. Repeat the original code for reference
+2. Analyze the original code
+3. Write the formalized code
+4. Analyze the formalized code to make sure it is semantically equivalent to the original code
+Follow the same structure as the helper functions.
+- "Important": Make sure you translate the original code without changing any logic or adding any new logic, there maybe bugs in the original code, but you should not fix them, just translate the original code. Don't fully trust the comments, you should follow the code logic.
+
+#### Gather possible bugs
+- After analyzing the original code and the formalized code, gather all the possible bugs in the original code here to be presented later.
+
+#### Final Code
 - Write the final code
     - Put imports and open commands in the imports part
     - Put the type definitions and helper functions in the helper_functions part
     - Put the main function in the main_function part
-
+- Compare the original code with the formalized Lean code to make sure the formalized code is semantically equivalent to the original code, to fix any details that are not consistent
+    - Put enough effort in this part because there maybe bugs that you didn't notice in the original code and modify it unconsciously and then the formalization is incorrect
+    - Don't allow any difference between the original code and the formalized Lean code, to make sure the formalization is correct
+- After this part, we have finished the Analysis part, then we will present the Lean code in the next part
 
 (Use ```lean and ``` to wrap the code, not ```lean4!)
 ### Lean Code
@@ -151,33 +274,38 @@ Including:
 <complete file content following the structure template>
 ```
 
+### Warning
+(Optional, only if you find some bugs during the analysis, write it with the title "### Warning". If not any, just don't add this title and content)
+- assume that the database operations are always successful, so you don't need to look for possible errors in the database operations
+
 ### Output
 ```json
 {{
-  "imports": "string of import statements and open commands, remember to import and open the table structure file you need to use",
-  "helper_functions": "string of type definitions and helper function definitions ",
+  "imports": "string of import statements and open commands",
+  "helper_functions": "string of return type definition and helper function definitions ",
   "main_function": "string of main function definition"
 }}
 ```
+
+
+Return your response in three parts: ### Analysis, ### Lean Code, ### Output
+- Add comments to the Lean code in English
+- Make sure the content in the Json object of the ### Output part is directly copied from the Lean Code part, and make no omission like the comments, the helper functions, etc.
+- The final result will be taken from the ### Output part, so make sure to put everything in the Lean file into that part and make no omission like the comments, the helper functions, etc.
+- Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
 
     RETRY_PROMPT = """
-Generated Lean file:
+### Generated Lean file
 {lean_file}
     
-Compilation failed with error:
+### Compilation failed with error
 {error}
 
 Please fix the Lean code while maintaining the same structure:
 {structure_template}
 
 Return both the corrected code and parsed fields.
-
-Hints:
-- Remember to add open commands to your imports to open the imported namespace after imports, these open commands should be in the imports field of the json
-- All the newly defined helper functions and types should be in the helper_functions field of the json
-- Add comments to the code in English
-- Make sure the content in the Json object is directly copied from the Lean Code part, and make no omission like the comments, the helper functions, etc.
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
@@ -229,23 +357,25 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                            api_deps: List[Tuple[str, str]]) -> str:
         """Format the complete user prompt"""
         parts = [
-            "\n# Database API Interface",
-            "```scala",
-            DB_API_DECLARATIONS,
-            "```",
-            "(The Database API Interface is only for reference, you should not use it in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.)\n\n",
+            # "\n# Database API Interface",
+            # "```scala",
+            # DB_API_DECLARATIONS,
+            # "```",
+            # "(The Database API Interface is only for reference, you should not use it in the Lean code, instead just read the raw sql code and translate it into Lean 4 code handling the table structure.)\n\n",
             APIFormalizer._format_table_dependencies(project, service, table_deps),
             APIFormalizer._format_api_dependencies(project, api_deps),
             "\n# Current API",
             api.to_markdown(show_fields={"planner_code": True, "message_code": True}),
-            "\nInstructions: ",
-            "1. Keep the original code structure and logic as much as possible, like the if-else structure, the match-case structure, etc.",
-            "2. The formalized code should be semantically equivalent to the original code, in the level of each function or each line of code",
-            "3. You can add some comments to explain the code, but don't add too many comments, only add comments to the key steps and important parts.",
-            "4. I take the final output only from the Json part, so make sure to put everything in the Lean file into those fields and make no omission.",
-            "5. Make sure the content in the Json object is directly copied from the Lean Code part, and make no omission like the comments, the helper functions, etc.",
-            "6. Add comments to the code in English",
-            "Make sure you have '### Output\n```json' in your response so that I can find the Json easily."
+            # "\nInstructions: ",
+            # "1. Keep the original code structure and logic as much as possible, like the if-else structure, the match-case structure, etc.",
+            # "2. The formalized code should be semantically equivalent to the original code, in the level of each function or each line of code",
+            # "3. You can add some comments to explain the code, but don't add too many comments, only add comments to the key steps and important parts.",
+            # "4. I take the final output only from the Json part, so make sure to put everything in the Lean file into those fields and make no omission.",
+            # "5. Make sure the content in the Json object is directly copied from the Lean Code part, and make no omission like the comments, the helper functions, etc.",
+            # "6. Add comments to the code in English",
+            # "Important: Make sure you translate the original code without changing any logic or adding any new logic, there maybe bugs in the original code, but you should not fix them, just translate the original code. Don't fully trust the comments, you should follow the code logic.",
+            # "Remember: You are translating the code not writing the code, ALWAYS follow the given code carefully and look carefully at every detail of the code.",
+            # "Make sure you have '### Output\n```json' in your response so that I can find the Json easily."
         ]
         return "\n".join(parts)
 
@@ -314,7 +444,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             prompt = (self.RETRY_PROMPT.format(error=error_message, 
                      structure_template=structure_template,
                      lean_file=lean_file_content) if attempt > 0 
-                     else f"{system_prompt}\n\n{user_prompt}")
+                     else self.REFERENCE_DB_API_DECLARATIONS + "\n\n" + f"{system_prompt}\n\n{user_prompt}")
             
             if logger:
                 logger.model_input(f"Prompt:\n{prompt}")
@@ -344,6 +474,15 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 
             # Parse response
             try:
+                # look for warning part
+                if "### Warning" in response:
+                    warning_parts = response.split("### Warning")
+                    if len(warning_parts) > 1:
+                        warning_text = warning_parts[-1].split("###")[0].strip()
+                        if logger:
+                            logger.warning(f"Formalization warning for {api.name}: {warning_text}")
+
+                            
                 json_str = response.split("```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)
                 
@@ -376,7 +515,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 success, error_message = project.build(parse=True, add_context=True, only_errors=True)
                 if success:
                     if logger:
-                        logger.debug(f"Successfully formalized API: {api.name}")
+                        logger.info(f"Successfully formalized API: {api.name}")
                     project.release_lock()
                     return True
                     

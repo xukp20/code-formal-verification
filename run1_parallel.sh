@@ -29,18 +29,22 @@ prover_model="deepseek-r1"
 add_mathlib=false
 
 
-project_name="BankAccount"
+# project_name="BankAccount"
+# project_name="BankAccountV1"
+# project_name="BankAccountV2"
+project_name="BankAccountV3"
+
 
 project_base_path="source_code"
 lean_base_path="lean_project"
 output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
 
-log_level="DEBUG"
+log_level="INFO"
 
 # task="formalize"
-# task="theorem_generate"
-task="prove"
+task="theorem_generate"
+# task="prove"
 
 max_theorem_retries=5
 max_global_attempts=4

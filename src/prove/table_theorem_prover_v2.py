@@ -519,79 +519,113 @@ theorem userLoginPreservesUniquePhoneNumbers
             theorem_type = "negative" if negative else "positive"
             logger.info(f"Proving table {theorem_type} theorems in parallel for project: {project.name}")
 
-        # Create theorem queue
-        theorem_queue: List[Tuple[Service, Table, TableTheorem, int, int]] = []
-        
-        # Collect all theorems that need proving
-        for service in project.services:
-            for table in service.tables:
-                if not table.properties:
-                    continue
-                for property_id, property in enumerate(table.properties):
-                    if not property.theorems:
+        for global_attempt in range(self.max_global_attempts):
+            if logger:
+                logger.info(f"Global attempt {global_attempt + 1}/{self.max_global_attempts}")
+
+            # Initialize tracking structures
+            theorem_queue: List[Tuple[Service, Table, TableTheorem, int, int]] = []
+            unproved_count = 0
+
+            # Collect all theorems that need proving
+            for service in project.services:
+                for table in service.tables:
+                    if not table.properties:
                         continue
-                    for theorem_id, theorem in enumerate(property.theorems):
-                        # Check if theorem needs proving
-                        if negative:
-                            if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
-                                continue
-                        else:
-                            if not theorem.theorem or theorem.theorem.theorem_proved:
-                                continue
-                        
-                        theorem_queue.append((service, table, theorem, property_id, theorem_id))
+                    for property_id, property in enumerate(table.properties):
+                        if not property.theorems:
+                            continue
+                        for theorem_id, theorem in enumerate(property.theorems):
+                            # Check if theorem needs proving
+                            if negative:
+                                if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
+                                    continue
+                            else:
+                                if not theorem.theorem or theorem.theorem.theorem_proved:
+                                    continue
+                            
+                            theorem_queue.append((service, table, theorem, property_id, theorem_id))
+                            unproved_count += 1
 
-        if not theorem_queue:
+            if unproved_count == 0:
+                if logger:
+                    logger.info("All theorems already proved")
+                break
+
             if logger:
-                logger.info("No theorems to prove")
-            return project
+                logger.info(f"{unproved_count} theorems remain unproved")
 
-        # Create semaphore to limit concurrent tasks
-        sem = asyncio.Semaphore(max_workers)
+            # Create semaphore to limit concurrent tasks
+            sem = asyncio.Semaphore(max_workers)
 
-        async def process_theorem(service: Service, table: Table, 
-                                theorem: TableTheorem, property_id: int,
-                                theorem_id: int, examples: List[LeanTheoremFile]) -> None:
-            """Process a single theorem"""
-            if logger:
-                logger.info(f"Processing theorem {theorem_id} for table: {table.name}")
+            async def process_theorem(service: Service, table: Table, 
+                                    theorem: TableTheorem, property_id: int,
+                                    theorem_id: int, examples: List[LeanTheoremFile]) -> None:
+                """Process a single theorem"""
+                if logger:
+                    logger.info(f"Processing theorem {theorem_id} for table: {table.name}")
+                
+                await self.prove_theorem(
+                    project=project,
+                    service=service,
+                    table=table,
+                    theorem=theorem,
+                    property_id=property_id,
+                    theorem_id=theorem_id,
+                    examples=examples,
+                    negative=negative,
+                    logger=logger
+                )
+
+            async def process_with_semaphore(task_tuple: Tuple, examples: List[LeanTheoremFile]):
+                service, table, theorem, property_id, theorem_id = task_tuple
+                async with sem:
+                    await process_theorem(service, table, theorem, property_id, theorem_id, examples)
+
+            # Process theorems in batches
+            while theorem_queue:
+                # Collect fresh examples for this batch
+                examples = self._collect_examples(project, self.max_examples, negative=negative)
+                if logger:
+                    logger.info(f"Collected {len(examples)} proof examples for next batch")
+
+                # Create tasks for next batch of theorems
+                tasks = []
+                while len(tasks) < max_workers and theorem_queue:
+                    task_tuple = theorem_queue.pop(0)
+                    tasks.append(process_with_semaphore(task_tuple, examples))
+
+                # Process batch of theorems
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                if logger:
+                    logger.info(f"Completed batch of {len(tasks)} theorems. {len(theorem_queue)} remaining")
+
+            # Check if all theorems are proved after this attempt
+            unproved_count = 0
+            for service in project.services:
+                for table in service.tables:
+                    if not table.properties:
+                        continue
+                    for property in table.properties:
+                        if not property.theorems:
+                            continue
+                        for theorem in property.theorems:
+                            if negative:
+                                if theorem.theorem_negative and not theorem.theorem_negative.theorem_proved:
+                                    unproved_count += 1
+                            else:
+                                if theorem.theorem and not theorem.theorem.theorem_proved:
+                                    unproved_count += 1
+
+            if unproved_count == 0:
+                if logger:
+                    logger.info("All theorems proved successfully")
+                break
             
-            await self.prove_theorem(
-                project=project,
-                service=service,
-                table=table,
-                theorem=theorem,
-                property_id=property_id,
-                theorem_id=theorem_id,
-                examples=examples,
-                negative=negative,
-                logger=logger
-            )
-
-        async def process_with_semaphore(task_tuple: Tuple, examples: List[LeanTheoremFile]):
-            service, table, theorem, property_id, theorem_id = task_tuple
-            async with sem:
-                await process_theorem(service, table, theorem, property_id, theorem_id, examples)
-
-        # Process theorems in batches
-        while theorem_queue:
-            # Collect fresh examples for this batch
-            examples = self._collect_examples(project, self.max_examples, negative=negative)
             if logger:
-                logger.info(f"Collected {len(examples)} proof examples for next batch")
-
-            # Create tasks for next batch of theorems
-            tasks = []
-            while len(tasks) < max_workers and theorem_queue:
-                task_tuple = theorem_queue.pop(0)
-                tasks.append(process_with_semaphore(task_tuple, examples))
-
-            # Process batch of theorems
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
-
-            if logger:
-                logger.info(f"Completed batch of {len(tasks)} theorems. {len(theorem_queue)} remaining")
+                logger.info(f"{unproved_count} theorems remain unproved after attempt {global_attempt + 1}")
 
         return project
 

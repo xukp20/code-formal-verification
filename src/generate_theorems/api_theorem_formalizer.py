@@ -29,6 +29,9 @@ Task:
 Convert an API requirement into a formal Lean 4 theorem following this structure:
 {structure_template}
 
+If you notice any potential formalization issues (e.g., missing return types, incomplete API functionality), you can include a warning section in your response. However, you should still attempt to provide the best possible theorem formalization given the current API implementation.
+
+
 File Structure Requirements:
 1. Imports Section:
    - Import all required APIs and tables from dependencies
@@ -36,10 +39,10 @@ File Structure Requirements:
    - The open commands for the imported APIs and tables should also be in this part, after all the imports
    - Example:
      ```lean
-     import Project.Service.API
-     import Project.Service.Table
-     open Project.Service.API
-     open Project.Service.Table
+     import Project.Service.APIs.API1
+     import Project.Service.Tables.Table1
+     open Project.Service.APIs.API1
+     open Project.Service.Tables.Table1
      ```
 
 2. Helper Functions:
@@ -73,7 +76,7 @@ File Structure Requirements:
    - Specify pre and post conditions
 
    Input constraints and dependent API responses:
-   - If the requirement has constraints on the input params, you may consider directly provide the response of the dependent APIs (those called in the API) of the current API as the premise of the theorem
+   - If the requirement has constraints on the input params, you may consider directly provide the response of the dependent APIs (those called in the current API) of the current API as the premise of the theorem
     - For example, if the requirement says `if the user and password is valid` and the current API depends on a `checkValid` API, you can directly write one of the hypothesis as `h_checkValid : checkValid user password = <some success type from that API>`
     - By doing this, we can separate the correctness of the current API from the correctness of the dependent APIs, and we can prove the current API's correctness by assuming the correctness of the dependent APIs
    - If the responses of the dependent APIs are directly provided in the requirement, you MUST use them as the premise of the theorem, instead of breaking them down into lower level hypotheses
@@ -110,26 +113,77 @@ Hints:
 1. State Management:
    - Track database state changes
    - Consider old vs new states
-   - Handle all possible outcomes
 2. Style:
    - Use clear variable names
-   - Add helpful comments
    - Follow Lean 4 conventions
    - Maintain consistent formatting
-3. Common Patterns:
-   - For validation checks, include the conditions in theorem assumptions
-   - For state changes, specify the relationship between old and new states
-   - For error cases, ensure they're properly represented in the theorem
-
 
 Return your response in three parts:
+
 ### Analysis
-Step-by-step reasoning of your formalization process
+Step-by-step reasoning of your formalization process, following the structure below:
+
+#### Imports
+- Analyze what to import and opens so that they can be used in the theorem
+- It is common to import all the imports and opens in the API file, and also import and open the API itself in the theorem file
+
+#### Inputs 
+- First, read the implementation of the API function, you need to include all the inputs of the API function as variables in the theorem
+
+#### Analyze the requirement
+- First, read the natural language requirement to split it into several structured parts:
+1. What are the conditions?
+    - What are the restrictions on the input parameters?
+    - What are the restrictions on the dependent APIs given the input params? Like the response of the dependent APIs given the current input params
+    - What are the restrictions on the table states? Like the existence or non-existence of specific records in the table given the input params
+    - How are these restrictions related together?
+2. What are the inputs?
+    - Do we need anymore inputs except the input parameters we have already included?
+3. What is the output?
+    - There is a function call to the given API, and the requirement should be related to the output of the function call
+    - What is the output type of the function call?
+    - If the type includes some value, what is the value?
+    - If any table is returned, what is the table? This should be considered by comparing it to the old table state, to find any record updated, added or deleted, or table not changed
+
+#### Conditions and hypotheses
+- Using the conditions we have analyzed, determine one by one how they can be written as hypotheses in Lean:
+1. First, determine if the condition is complicated and needs to use a helper function to represent it
+2. If so, look for any existing helper functions that can do the job in the implementation of the API function. If you can't find any, create a new one.
+3. If the condition is simple, you can write it directly as a hypothesis
+4. Write this single part of the condition as a hypothesis in Lean
+    - If you find the implementation of the API file missing some essential parts that you need to formalize the condition, you should consider it as a potential bug, which will be presented in the ### Warning section later. But you should still try your best to formalize the theorem based on the information you have.
+        - For example, if the implementation of the API file has no API call to a `checkValid` API, but the requirement describes that the input params should be checked by the `checkValid` API, you should point it out here, but try to find the closest way to formalize the condition.
+5. Repeat the above steps until all the conditions are written as hypotheses
+
+#### Conclusion
+- Using the requirements on the output of the API function, determine the conclusion of the theorem
+1. First, break the requirement into several parts, like the output type, value and the state of the table
+2. Then, try to formalize each part into a statement in Lean. Like the conditions, determine if you need to use an existing helper function or create a new one, or just write it directly
+    - If you find the implementation of the API file missing some essential parts that you need to formalize the theorem, you should consider it as a potential bug, which will be presented in the ### Warning section later. But you should still try your best to formalize the theorem based on the information you have.
+        - For example, if the return type of the API has no "NoPermissionError" type, but the requirement describes that the output type should be no permission error, you should point it out here, but try to find the closest type you can use to represent the requirement.
+3. Repeat the above steps until all the parts are written as statements in Lean
+4. Combine all the statements into a single conclusion, you may need to use the logic of `and`, `or`, `not`, `implies` and `iff` to combine them. Write the logic notations in Lean.
+
+#### Summary 
+In this part, you should go through the analysis above to:
+- Construct the final theorem statement, the proof should be `sorry`
+- Collect all the potential warnings here
+
+After these steps, you should have a complete theorem statement. Now put it in the ### Lean Code:
+
 
 ### Lean Code
 ```lean
 <complete file content following the structure template>
 ```
+
+### Warning 
+(Optional)
+If you notice any potential formalization issues that prevent you from writing a theorem statement, describe them here, with a title of "### Warning". For example:
+- Missing return types in API functions
+If you notice some issues but that doesn't lead to compilation errors, you should not include this section and try to do the formalization with the given formalization.
+Don't include this section in the output json.
+! If not any warning, just don't add this title and content. Please don't put this section with a content saying "There is no warning" which will be considered as a fake warning.
 
 ### Output  
 ```json
@@ -142,13 +196,9 @@ Step-by-step reasoning of your formalization process
 ```
 
 Important:
-- Follow file structure exactly
-- Include all necessary imports
-- Define required helper functions
 - Use original requirement as comment
 - Make theorem specific and precise
 - Use sorry for proofs
-- Try not to define new helper functions if you can use the existing ones
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
@@ -299,6 +349,13 @@ Service: {service.name}
                 continue
                 
             try:
+                if "### Warning" in response:
+                    warning_parts = response.split("### Warning")
+                    if len(warning_parts) > 1:
+                        warning_text = warning_parts[-1].split("###")[0].strip()
+                        if logger:
+                            logger.warning(f"Formalization warning for {api.name} theorem {theorem_id} [{theorem.description}]: {warning_text}")
+                            
                 # Parse response
                 json_str = response.split("```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)
