@@ -30,8 +30,8 @@ prover_model="deepseek-r1"
 add_mathlib=false
 
 
-# project_name="UserAuthentication"
-# project_name="UserAuthenticationV1"
+project_name="UserAuthentication"
+project_name="UserAuthenticationV1"
 project_name="UserAuthenticationV2"
 
 # project_name="BankAccount"
@@ -44,15 +44,15 @@ doc_path=$project_base_path/$project_name/"doc.md"
 log_level="INFO"
 # log_level="DEBUG"
 
-task="formalize"
+# task="formalize"
 # task="theorem_generate"
-# task="prove"
+task="prove"
 
 max_theorem_retries=5
-max_global_attempts=3
+max_global_attempts=5
 max_examples=3
 
-max_workers=8
+max_workers=4
 
 random_seed=1234
 

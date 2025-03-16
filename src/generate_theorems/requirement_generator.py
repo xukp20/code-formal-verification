@@ -34,6 +34,11 @@ To be specific, in the input part, we may explain:
     - For example, to make a login API works correctly, we need to assume that the user table has no duplicate users. So If you want to check the database error response, you can assume the user table has duplicate users.
     - But if you want to check the success response or the invalid credential error response, you need to express first that the user table has no duplicate users as the high level premise, after that explaining if the user exists or if the password is correct to determine the response.
     - You need to express this kind of premise in the requirements too, to make sure the requirement correctly describe the API behavior.
+5. Following the above rules, you need to look for sequential and hiding premises in the documentation, and express them explicitly in the requirements.
+    - For example, if the first line of the documentation is "If the input param is not valid, return a input not valid error", and the following lines describe the logic when the input param is valid, you should:
+        - First correct a requirement explaining that when the input param is not valid, the API will return a input not valid error.
+        - Then, for the following lines, you should always add a explanation that "The input param is valid" as one of the premise, to make sure the requirement correctly describe the API behavior.
+        - This is needed because every requirement will be used independently, so it needs to be self-contained, without losing any premise that is hidden in another requirement before it (which is not visible to it later).
 
 The output part will be:
 1. The response of the API
@@ -61,12 +66,58 @@ Important:
 - Avoid implementation details, just focus on the input/output relationship and the database state changes
 
 Return your analysis in two parts:
+
 ### Analysis
-Step-by-step reasoning of requirement extraction
+Step-by-step reasoning of requirement extraction, following this format:
+
+- If the documentation describe the API logic in a sequential way, keep track of all the existing premises until now to reach the current branch of the logic.
+- Go through the doc line by line:
+1. See if a new requirement is introduced. 
+- If so, considering how to describe this rule. 
+- Then consider which of the premises needs to be added to this requirement to make sure it is self-contained.
+    - Premises should be added if they explain the control flow so that we can only move to the current requirement when the premise is true.
+    - Not all of the premises are needed for every requirement. Sometimes the new requirement just contains the previous premise, for example, there is exactly one matched record in the table contains the premise that there are records matched the input params.
+- Write the whole requirement as a sentence, explaining "If" what conditions, "then" what response from the API together with the database state changes.
+2. Consider if any premise that control the logic flow needs to be added after this line. If so update the existing premises.
+3. Repeat the above steps until the whole documentation is considered.
+
+So write the analysis like this:
+#### Requirement <0-n>
+##### Doc content
+<repeat the line of the doc content you depend on to generate this requirement>
+
+##### Current premises 
+<list all the premises you have considered so far, like "Check valid returns success, input param is legal...">
+
+##### Thinking
+<your thinking of how to describe this rule, and which premises are needed to combine with the doc content to generate this requirement>
+
+##### Requirement
+<the requirement you finally write, by fusing the conditions from the doc content and premises that are not included in the doc content, and explaining the output and the database state changes>
+
+##### Updated premises
+<list all the premises you have considered so far after writing the requirement, if the requirement introduces new premises, add them to the list>
+
+Loop until you have considered all the doc content.
+
+Final Output format:
 
 ### Output
 ```json
 ["requirement 1", "requirement 2", ...]
+```
+
+Example:
+### Output
+```json
+    [
+        "If the input param a is not legal, return a input not legal error and all the tables remain unchanged",
+        "If the input param a is legal, but checkValid returns false, return a input not valid error and keep the xxx table unchanged",
+        "If the input is legal and checkValid returns true, and there are multiple records in the xxx table, return a database integrity error and keep the xxx table unchanged",
+        "If the input is legal and checkValid returns true, and there is exactly one record in the xxx table, return ... and the table ...",
+        "If the input is legal and checkValid returns true, and there is no record in the xxx table, return ... and the table ...",
+        ...
+    ]
 ```
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""

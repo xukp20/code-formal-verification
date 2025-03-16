@@ -275,8 +275,9 @@ Follow the same structure as the helper functions.
 ```
 
 ### Warning
-(Optional, only if you find some bugs during the analysis, write it with the title "### Warning". If not any, just don't add this title and content)
+(Optional, only if you find some bugs during the analysis, write it with the title "### Warning". )
 - assume that the database operations are always successful, so you don't need to look for possible errors in the database operations
+- If there is no warning, put a single word "None" for this part, without any other words
 
 ### Output
 ```json
@@ -404,6 +405,19 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 return "panic! is not allowed in function body. Please handle errors using result types instead."
                 
         return None
+    
+    def _parse_warning(self, response: str) -> Optional[str]:
+        """Parse the warning from the response"""
+        if "### Warning" in response:
+            warning_parts = response.split("### Warning")
+            if len(warning_parts) > 1:
+                warning_text = warning_parts[-1].split("###")[0].strip()
+                lines = warning_text.split("\n")
+                # If any line is "None", return None
+                if any(line.strip() == "None" for line in lines):
+                    return None
+                return warning_text
+        return None
 
     async def formalize_api(self, project: ProjectStructure, service: Service, 
                            api: APIFunction, table_deps: List[str], 
@@ -475,14 +489,10 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             # Parse response
             try:
                 # look for warning part
-                if "### Warning" in response:
-                    warning_parts = response.split("### Warning")
-                    if len(warning_parts) > 1:
-                        warning_text = warning_parts[-1].split("###")[0].strip()
-                        if logger:
-                            logger.warning(f"Formalization warning for {api.name}: {warning_text}")
-
-                            
+                warning_text = self._parse_warning(response)
+                if warning_text and logger:
+                    logger.warning(f"Formalization warning for {api.name}: {warning_text}")
+   
                 json_str = response.split("```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)
                 

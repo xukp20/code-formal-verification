@@ -161,6 +161,7 @@ Step-by-step reasoning of your formalization process, following the structure be
 2. Then, try to formalize each part into a statement in Lean. Like the conditions, determine if you need to use an existing helper function or create a new one, or just write it directly
     - If you find the implementation of the API file missing some essential parts that you need to formalize the theorem, you should consider it as a potential bug, which will be presented in the ### Warning section later. But you should still try your best to formalize the theorem based on the information you have.
         - For example, if the return type of the API has no "NoPermissionError" type, but the requirement describes that the output type should be no permission error, you should point it out here, but try to find the closest type you can use to represent the requirement.
+    - Consider how to formalize the table state changes in the conclusion: Use new record, removed record or updated record. Or if you really need to check the whole table, make sure the new record is added to the end of the list.
 3. Repeat the above steps until all the parts are written as statements in Lean
 4. Combine all the statements into a single conclusion, you may need to use the logic of `and`, `or`, `not`, `implies` and `iff` to combine them. Write the logic notations in Lean.
 
@@ -183,7 +184,7 @@ If you notice any potential formalization issues that prevent you from writing a
 - Missing return types in API functions
 If you notice some issues but that doesn't lead to compilation errors, you should not include this section and try to do the formalization with the given formalization.
 Don't include this section in the output json.
-! If not any warning, just don't add this title and content. Please don't put this section with a content saying "There is no warning" which will be considered as a fake warning.
+- If there is no warning, put a single word "None" for this part, without any other words
 
 ### Output  
 ```json
@@ -199,6 +200,7 @@ Important:
 - Use original requirement as comment
 - Make theorem specific and precise
 - Use sorry for proofs
+- New records should be added to the end of the list of the table
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
@@ -221,6 +223,7 @@ Make sure to:
 Hints:
 - Remember to add open commands to your imports to open the imported namespace after imports, these open commands should be in the imports field of the json
 - All the newly defined helper functions and types should be in the helper_functions field of the json
+- New records should be added to the end of the list of the table
 
 Return both the corrected code and parsed fields.
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
@@ -258,6 +261,19 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                         break
                         
         return "\n".join(lines)
+    
+    def _parse_warning(self, response: str) -> Optional[str]:
+        """Parse the warning from the response"""
+        if "### Warning" in response:
+            warning_parts = response.split("### Warning")
+            if len(warning_parts) > 1:
+                warning_text = warning_parts[-1].split("###")[0].strip()
+                lines = warning_text.split("\n")
+                # If any line is "None", return None
+                if any(line.strip() == "None" for line in lines):
+                    return None
+                return warning_text
+        return None
 
     async def formalize_theorem(self,
                               project: ProjectStructure,
@@ -297,6 +313,8 @@ Service: {service.name}
 
 # Requirement to Formalize
 {theorem.description}
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
 
         if logger:
@@ -349,13 +367,10 @@ Service: {service.name}
                 continue
                 
             try:
-                if "### Warning" in response:
-                    warning_parts = response.split("### Warning")
-                    if len(warning_parts) > 1:
-                        warning_text = warning_parts[-1].split("###")[0].strip()
-                        if logger:
-                            logger.warning(f"Formalization warning for {api.name} theorem {theorem_id} [{theorem.description}]: {warning_text}")
-                            
+                warning_text = self._parse_warning(response)
+                if warning_text and logger:
+                    logger.warning(f"Formalization warning for {api.name} theorem {theorem_id}:\n[{theorem.description}]\n{warning_text}")
+                
                 # Parse response
                 json_str = response.split("```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)

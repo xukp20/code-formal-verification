@@ -29,7 +29,7 @@ prover_model="deepseek-r1"
 add_mathlib=false
 
 
-# project_name="BankAccount"
+project_name="BankAccount"
 # project_name="BankAccountV1"
 # project_name="BankAccountV2"
 project_name="BankAccountV3"
@@ -43,19 +43,19 @@ doc_path=$project_base_path/$project_name/"doc.md"
 log_level="INFO"
 
 # task="formalize"
-task="theorem_generate"
-# task="prove"
+# task="theorem_generate"
+task="prove"
 
 max_theorem_retries=5
-max_global_attempts=4
+max_global_attempts=5
 max_examples=3
 
-max_workers=8
+max_workers=4
 
 random_seed=1234
 
-continue=true
-start_state="API_THEOREMS"
+# continue=true
+# start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
 # start_state="TABLE_THEOREMS"
 

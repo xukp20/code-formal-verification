@@ -185,7 +185,7 @@ If you notice any potential formalization issues that prevent you from writing a
 - Missing return types in API functions
 If you notice some issues but that doesn't lead to compilation errors, you should not include this section and try to do the formalization with the given formalization.
 Don't include this section in the output json.
-! If not any warning, just don't add this title and content. Please don't put this section with a content saying "There is no warning" which will be considered as a fake warning.
+- If there is no warning, put a single word "None" for this part, without any other words
 
 ### Output
 ```json
@@ -262,6 +262,19 @@ Make sure you have "### Output\n```json" in your response."""
                     ])
         
         return "\n".join(sections)
+    
+    def _parse_warning(self, response: str) -> Optional[str]:
+        """Parse the warning from the response"""
+        if "### Warning" in response:
+            warning_parts = response.split("### Warning")
+            if len(warning_parts) > 1:
+                warning_text = warning_parts[-1].split("###")[0].strip()
+                lines = warning_text.split("\n")
+                # If any line is "None", return None
+                if any(line.strip() == "None" for line in lines):
+                    return None
+                return warning_text
+        return None
 
     async def formalize_theorem(self,
                               project: ProjectStructure,
@@ -298,7 +311,9 @@ Table: {table.name}
 API: {dep_api.name}
 Property: {property.description}
 
-{dependencies}"""
+{dependencies}
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
         if logger:
             logger.model_input(f"Theorem formalization prompt:\n{user_prompt}")
@@ -351,6 +366,10 @@ Property: {property.description}
                 
             try:
                 # Parse response
+                warning_text = self._parse_warning(response)
+                if warning_text and logger:
+                    logger.warning(f"Formalization warning for table {table.name} theorem {theorem_id}:\nProperty: {property.description}\nAPI: {dep_api.name}\n{warning_text}")
+                    
                 json_str = response.split("```json")[-1].split("```")[0].strip()
                 fields = json.loads(json_str)
                 assert "description" in fields
