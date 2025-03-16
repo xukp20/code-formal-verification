@@ -54,8 +54,8 @@ max_workers=8
 
 random_seed=1234
 
-# continue=true
-# start_state="API_THEOREMS"
+continue=true
+start_state="API_THEOREMS"
 # start_state="API_FORMALIZATION"
 # start_state="TABLE_THEOREMS"
 

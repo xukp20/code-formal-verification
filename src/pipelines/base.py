@@ -37,12 +37,16 @@ class PipelineBase(ABC):
         # Create output directory
         self.output_path.mkdir(parents=True, exist_ok=True)
         
-        # Initialize logger
+        # Initialize logger with log file
+        log_file = self.output_path / "log.txt"
         self.logger = get_logger(
             name=f"{pipeline_dir}_pipeline",
             log_level=log_level,
-            log_model_io=log_model_io
+            log_model_io=log_model_io,
+            log_file=str(log_file)
         )
+        
+        self.logger.info(f"Pipeline initialized. Logs will be saved to: {log_file}")
 
     @property
     @abstractmethod
