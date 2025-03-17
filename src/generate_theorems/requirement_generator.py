@@ -73,8 +73,12 @@ Step-by-step reasoning of requirement extraction, following this format:
 - If the documentation describe the API logic in a sequential way, keep track of all the existing premises until now to reach the current branch of the logic.
 - Go through the doc line by line:
 1. See if a new requirement is introduced. 
-- If so, considering how to describe this rule. 
-- Then consider which of the premises needs to be added to this requirement to make sure it is self-contained.
+- If so, see if the doc content contains more than one requirement.
+    - For example, if the doc content explains (If A or B, then C), then it means A -> C and B -> C, so you need to generate two requirements.
+    - But any "and" logic should be considered as one requirement, for example, if the doc content explains (If A and B, then C), then it means A together with B gives C, so you only need to generate one requirement.
+    - For the "or" logic, consider carefully to determine if you need to generate multiple requirements.
+- If any new requirement is introduced, create a raw description of it, to go through the following steps one by one:
+    - Consider which of the premises needs to be added to this requirement to make sure it is self-contained.
     - Premises should be added if they explain the control flow so that we can only move to the current requirement when the premise is true.
     - Not all of the premises are needed for every requirement. Sometimes the new requirement just contains the previous premise, for example, there is exactly one matched record in the table contains the premise that there are records matched the input params.
 - Write the whole requirement as a sentence, explaining "If" what conditions, "then" what response from the API together with the database state changes.

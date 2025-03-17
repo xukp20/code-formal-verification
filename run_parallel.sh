@@ -31,8 +31,13 @@ add_mathlib=false
 
 
 project_name="UserAuthentication"
-project_name="UserAuthenticationV1"
-project_name="UserAuthenticationV2"
+# project_name="UserAuthenticationV1"
+# project_name="UserAuthenticationV2"
+
+# if has $1, load project_name from $1
+if [ -n "$1" ]; then
+    project_name=$1
+fi
 
 # project_name="BankAccount"
 
@@ -48,7 +53,7 @@ log_level="INFO"
 # task="theorem_generate"
 task="prove"
 
-max_theorem_retries=5
+max_theorem_retries=8
 max_global_attempts=5
 max_examples=3
 

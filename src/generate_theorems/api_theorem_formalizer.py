@@ -137,6 +137,8 @@ Step-by-step reasoning of your formalization process, following the structure be
     - What are the restrictions on the dependent APIs given the input params? Like the response of the dependent APIs given the current input params
     - What are the restrictions on the table states? Like the existence or non-existence of specific records in the table given the input params
     - How are these restrictions related together?
+        - If any two conditions are related use "or", they must be formalized into a single formal hypothesis to make sure their relationship is correct.
+        - If conditions with "or" logic are formalized separately, they will be forming a "and" logic in the theorem, which is not what we want.
 2. What are the inputs?
     - Do we need anymore inputs except the input parameters we have already included?
 3. What is the output?
@@ -149,6 +151,9 @@ Step-by-step reasoning of your formalization process, following the structure be
 - Using the conditions we have analyzed, determine one by one how they can be written as hypotheses in Lean:
 1. First, determine if the condition is complicated and needs to use a helper function to represent it
 2. If so, look for any existing helper functions that can do the job in the implementation of the API function. If you can't find any, create a new one.
+    - Try your best to reuse the existing helper functions, instead of creating new ones, so that we can get concise and clear theorems
+    - But remember to go through the chosen helper function to make sure it is correct and do what you want
+    - If so, never create a new helper function that applys an exactly same logic as the existing helper functions, which may cause difficulty for the prover
 3. If the condition is simple, you can write it directly as a hypothesis
 4. Write this single part of the condition as a hypothesis in Lean
     - If you find the implementation of the API file missing some essential parts that you need to formalize the condition, you should consider it as a potential bug, which will be presented in the ### Warning section later. But you should still try your best to formalize the theorem based on the information you have.

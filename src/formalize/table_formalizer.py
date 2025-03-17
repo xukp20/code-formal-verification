@@ -38,6 +38,7 @@ Convert the given table definition into Lean 4 code following these requirements
        age: Option Nat
        deriving Repr
      ```
+   - If the table description using a string like ["value1", "value2", "value3"] to represent a field which is actually a list of values, you should define it as a list in the Lean code for the record, to avoid converting between list and string.
 
 4. Table Structure:
    - Define main table structure containing rows

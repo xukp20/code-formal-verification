@@ -68,6 +68,8 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             "1. Analyze the table descriptions above",
             "2. Identify all dependencies between tables",
             "3. Return a JSON object mapping each table to its dependencies",
+            "4. All the dependencies should be tables given in the table descriptions",
+            "5. The current table itself should not be included in the dependencies",
             "\n# Expected Output Format",
             "```json",
             json.dumps({table.name: ["<list of tables that this table depends on>"] 

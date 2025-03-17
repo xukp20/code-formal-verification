@@ -83,6 +83,7 @@ Convert the given API implementation into Lean 4 code which has exactly same mea
         let (result, new_x_table) := queryXXX(params, old_x_table);
         -- Use the new_x_table for the future operations
         ```
+    - "Important": You can only ignore the table variable in this way, you must not ignore any return value or error types!
 
 4. Outcome Types:
    - Use explicit inductive types for outcomes
@@ -203,7 +204,7 @@ inductive <api_name>Result where
 -  Note that the info message is not a return value:
     - For example, if all success gives a string "Success", you should not add a string "Success" to the success type.
     - But if the success type return an int value for some actual meaning that should be different for different input params, you should add it to the success type.
-- Be careful with return types that has a string inside, there is a big chance that it is not a return value but an info message, so you should not add it to the success type.
+- "Important": Be careful with return types that has a string inside, there is a big chance that it is not a return value but an info message, so you should not add it to the success type.
     - Examine all the return types with a string inside to figure out if it is a return value or an info message. If info message, just remove the string.
 
 #### Code Structure
@@ -231,11 +232,15 @@ So for each of the helper functions, you need:
 - What it does, by reading the code line by line
 - How it is implemented
 - Any potential bugs
+- What is called in this function: Any dependent APIs or any other helper functions? If so, what are the return types of the dependent functions and how to handle each of the branches?
+    - For dependent APIs, any unchanged tables can be ignored?
+    - For return values and error types that are not the table, make sure you never ignore them with "_"
 - What is the return type of the function: if any exception is raised, you can return a value which is align with the original code type together with a result type of the current API to handle the errors
     - For example, if the original code returns a bool with some tables, you can return bool × <api_name>Result × AnyTable... if you need to handle possible errors raised in this function
 
 3. Formalized Code
 - Write the formalized code for this single function
+- If call any helper functions or dependent APIs, you should handle all the possible return types and errors, instead of ignoring all or some of them
 - Add comments to the Lean code in English, can be the same as the original code comments or some more detailed explanations
 ```lean
 <formalized_code>
@@ -254,6 +259,9 @@ So for each of the helper functions, you need:
 4. Analyze the formalized code to make sure it is semantically equivalent to the original code
 Follow the same structure as the helper functions.
 - "Important": Make sure you translate the original code without changing any logic or adding any new logic, there maybe bugs in the original code, but you should not fix them, just translate the original code. Don't fully trust the comments, you should follow the code logic.
+- "Important": If call any helper functions or dependent APIs, you should handle all the possible return types and errors, instead of ignoring all or some of them
+    - Which means you should match all the possible return types and errors from the helper functions or dependent APIs, and determine what to do for each of the branches
+    - For example, if the helper function returns a db error or other kind of error, you cannot ignore it with "_", instead you should handle it with match-case and return the error type
 
 #### Gather possible bugs
 - After analyzing the original code and the formalized code, gather all the possible bugs in the original code here to be presented later.
@@ -290,6 +298,7 @@ Follow the same structure as the helper functions.
 
 
 Return your response in three parts: ### Analysis, ### Lean Code, ### Output
+- Ensure all the error types are passed to the current API function and returned correctly instead of ignored with "_"
 - Add comments to the Lean code in English
 - Make sure the content in the Json object of the ### Output part is directly copied from the Lean Code part, and make no omission like the comments, the helper functions, etc.
 - The final result will be taken from the ### Output part, so make sure to put everything in the Lean file into that part and make no omission like the comments, the helper functions, etc.
