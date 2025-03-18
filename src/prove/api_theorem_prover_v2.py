@@ -157,7 +157,7 @@ Here are some examples of how to write proofs:
 
 Please make sure the fields in the json output are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
 
-You are not allowed to change the theorem statement, only add proof. Please make sure the theorem part is exactly the same as the theorem part in the input theorem file, and I will check it for validation.
+Important: You are not allowed to change the theorem statement, only add proof. Please make sure the theorem part is exactly the same as the theorem part in the input theorem file, and I will check it for validation.
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 
@@ -202,7 +202,7 @@ Here are some examples of how to write proofs:
 
 Please make sure the fields in the json output are directly copied from the ### Lean Code part you write, for example the "theorem_proved" field should be the same as the theorem part in the ### Lean Code part, with comments between tactics you use.
 
-You are not allowed to change the theorem statement, only add proof. Please make sure the theorem part is exactly the same as the theorem part in the input theorem file, and I will check it for validation.
+Important: You are not allowed to change the theorem statement, only add proof. Please make sure the theorem part is exactly the same as the theorem part in the input theorem file, and I will check it for validation.
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 
@@ -511,10 +511,10 @@ theorem userLoginSuccessWhenCredentialsMatch
         return False
 
     async def _prove_parallel(self,
-                            project: ProjectStructure,
-                            negative: bool = False,
-                            logger: Optional[Logger] = None,
-                            max_workers: int = 1) -> ProjectStructure:
+                         project: ProjectStructure,
+                         negative: bool = False,
+                         logger: Optional[Logger] = None,
+                         max_workers: int = 1) -> ProjectStructure:
         """Prove API theorems in parallel with dynamic examples"""
         if logger:
             theorem_type = "negative" if negative else "positive"
@@ -525,28 +525,32 @@ theorem userLoginSuccessWhenCredentialsMatch
                 logger.info(f"Global attempt {global_attempt + 1}/{self.max_global_attempts}")
 
             # Initialize tracking structures
-            pending_apis = {f"{service_name}.{api_name}" for service_name, api_name in project.api_topological_order}
-            completed_apis = set()
-            
-            # Track theorem submission status for each API
-            theorem_status: Dict[str, List[bool]] = {}
+            theorem_queue: List[Tuple[Service, APIFunction, APITheorem, int]] = []
             unproved_count = 0
-            
-            # Initialize theorem status and count unproved theorems
-            for api_key in pending_apis:
-                service_name, api_name = api_key.split(".")
+
+            # Collect all theorems that need proving
+            for service_name, api_name in project.api_topological_order:
+                service = project.get_service(service_name)
                 api = project.get_api(service_name, api_name)
-                if api and api.theorems:
-                    status = []
-                    for theorem in api.theorems:
-                        if negative:
-                            is_proved = (not theorem.theorem_negative) or theorem.theorem_negative.theorem_proved
-                        else:
-                            is_proved = (not theorem.theorem) or theorem.theorem.theorem_proved
-                        status.append(is_proved)
-                        if not is_proved:
-                            unproved_count += 1
-                    theorem_status[api_key] = status
+                if not service or not api:
+                    continue
+                
+                if not api.theorems:
+                    if logger:
+                        logger.warning(f"No theorems to prove for API: {api.name}")
+                    continue
+
+                # Add unproved theorems to queue
+                for theorem_id, theorem in enumerate(api.theorems):
+                    if negative:
+                        if not theorem.theorem_negative or theorem.theorem_negative.theorem_proved:
+                            continue
+                    else:
+                        if not theorem.theorem or theorem.theorem.theorem_proved:
+                            continue
+                    
+                    theorem_queue.append((service, api, theorem, theorem_id))
+                    unproved_count += 1
 
             if unproved_count == 0:
                 if logger:
@@ -555,9 +559,6 @@ theorem userLoginSuccessWhenCredentialsMatch
 
             if logger:
                 logger.info(f"{unproved_count} theorems remain unproved")
-
-            # Queue for ready-to-prove theorems
-            theorem_queue: List[Tuple[Service, APIFunction, APITheorem, int]] = []
 
             # Create semaphore to limit concurrent tasks
             sem = asyncio.Semaphore(max_workers)
@@ -585,43 +586,8 @@ theorem userLoginSuccessWhenCredentialsMatch
                 async with sem:
                     await process_theorem(service, api, theorem, theorem_id, examples)
 
-            while pending_apis or theorem_queue:
-                # Find APIs whose dependencies are all completed
-                ready_apis = set()
-                for api_key in pending_apis:
-                    service_name, api_name = api_key.split(".")
-                    api = project.get_api(service_name, api_name)
-                    if not api:
-                        continue
-                        
-                    deps_completed = all(f"{dep_service}.{dep_api}" in completed_apis 
-                                       for dep_service, dep_api in api.dependencies.apis)
-                    if deps_completed:
-                        ready_apis.add(api_key)
-
-                # Add theorems from ready APIs to queue
-                for api_key in ready_apis:
-                    service_name, api_name = api_key.split(".")
-                    service = project.get_service(service_name)
-                    api = project.get_api(service_name, api_name)
-                    if not service or not api or not api.theorems:
-                        continue
-
-                    for theorem_id, theorem in enumerate(api.theorems):
-                        # Skip if theorem is already proved
-                        if theorem_status[api_key][theorem_id]:
-                            continue
-                            
-                        theorem_queue.append((service, api, theorem, theorem_id))
-
-                # Update pending APIs set
-                pending_apis -= ready_apis
-
-                if not theorem_queue:
-                    if not pending_apis:
-                        break
-                    continue
-
+            # Process theorems in batches
+            while theorem_queue:
                 # Collect fresh examples for this batch
                 examples = self._collect_examples(project, self.max_examples, negative=negative)
                 if logger:
@@ -631,39 +597,31 @@ theorem userLoginSuccessWhenCredentialsMatch
                 tasks = []
                 while len(tasks) < max_workers and theorem_queue:
                     task_tuple = theorem_queue.pop(0)
-                    service, api, theorem, theorem_id = task_tuple
                     tasks.append(process_with_semaphore(task_tuple, examples))
-                    # Mark theorem as submitted
-                    api_key = f"{service.name}.{api.name}"
-                    theorem_status[api_key][theorem_id] = True
 
                 # Process batch of theorems
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Check for completed APIs
-                newly_completed = set()
-                for api_key, status in theorem_status.items():
-                    if all(status) and api_key not in completed_apis:
-                        newly_completed.add(api_key)
-                        if logger:
-                            logger.info(f"Completed all theorems for API: {api_key}")
-
-                completed_apis.update(newly_completed)
+                if logger:
+                    logger.info(f"Completed batch of {len(tasks)} theorems. {len(theorem_queue)} remaining")
 
             # Check if all theorems are proved after this attempt
             unproved_count = 0
-            for api_key in theorem_status:
-                service_name, api_name = api_key.split(".")
+            for service_name, api_name in project.api_topological_order:
+                service = project.get_service(service_name)
                 api = project.get_api(service_name, api_name)
-                if api and api.theorems:
-                    for theorem_id, theorem in enumerate(api.theorems):
+                if not service or not api:
+                    continue
+                
+                if api.theorems:
+                    for theorem in api.theorems:
                         if negative:
-                            is_proved = (not theorem.theorem_negative) or theorem.theorem_negative.theorem_proved
+                            if theorem.theorem_negative and not theorem.theorem_negative.theorem_proved:
+                                unproved_count += 1
                         else:
-                            is_proved = (not theorem.theorem) or theorem.theorem.theorem_proved
-                        if not is_proved:
-                            unproved_count += 1
+                            if theorem.theorem and not theorem.theorem.theorem_proved:
+                                unproved_count += 1
 
             if unproved_count == 0:
                 if logger:
