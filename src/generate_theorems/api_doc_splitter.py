@@ -23,6 +23,12 @@ Analyze the provided API documentation and split it into individual API descript
 Return your analysis in two parts:
 ### Analysis
 Step-by-step reasoning of your documentation splitting process
+- First, find out all the services and the names of the APIs in each service
+- Then, for each service, write a "## ServiceName" title, and then:
+    - Look for the documentation of each API in the service section
+    - Write the documentation for each API in the format of "### API Name\nAPI documentation text"
+- After that, write all the API documentation in the format of "### Output\n```json"
+- Make sure no API is duplicated or missing
 
 ### Output
 ```json
@@ -43,6 +49,7 @@ Important:
 - The Json dict starts from the ServiceName key, so you should not include the project name as the highest level key
 - Just ignore the project name if it is in the documentation
 - Write all the documentation in English
+- If the old doc content is well-structured like each API is in a separate section of markdown, you should keep that structure, and just take out the documentation for each API maintaining the original markdown format
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 

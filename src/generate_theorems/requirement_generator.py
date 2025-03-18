@@ -70,37 +70,83 @@ Return your analysis in two parts:
 ### Analysis
 Step-by-step reasoning of requirement extraction, following this format:
 
-- If the documentation describe the API logic in a sequential way, keep track of all the existing premises until now to reach the current branch of the logic.
+- If the documentation describe the API logic in a sequential way, please rewrite the doc content to make it more readable:
+    - Add omitted premises if any to the other branches of the logic
+    - Split the line with "or" logic into multiple lines
+        - For example, if the doc content explains (If A or B, then C), then it means A -> C and B -> C, so you need to generate two requirements.
+        - But any "and" logic should be considered as one requirement, for example, if the doc content explains (If A and B, then C), then it means A together with B gives C, so you only need to generate one requirement.
+        - For the "or" logic, consider carefully to determine if you need to generate multiple requirements.
+
 - Go through the doc line by line:
 1. See if a new requirement is introduced. 
-- If so, see if the doc content contains more than one requirement.
-    - For example, if the doc content explains (If A or B, then C), then it means A -> C and B -> C, so you need to generate two requirements.
-    - But any "and" logic should be considered as one requirement, for example, if the doc content explains (If A and B, then C), then it means A together with B gives C, so you only need to generate one requirement.
-    - For the "or" logic, consider carefully to determine if you need to generate multiple requirements.
 - If any new requirement is introduced, create a raw description of it, to go through the following steps one by one:
     - Consider which of the premises needs to be added to this requirement to make sure it is self-contained.
     - Premises should be added if they explain the control flow so that we can only move to the current requirement when the premise is true.
     - Not all of the premises are needed for every requirement. Sometimes the new requirement just contains the previous premise, for example, there is exactly one matched record in the table contains the premise that there are records matched the input params.
 - Write the whole requirement as a sentence, explaining "If" what conditions, "then" what response from the API together with the database state changes.
-2. Consider if any premise that control the logic flow needs to be added after this line. If so update the existing premises.
-3. Repeat the above steps until the whole documentation is considered.
+2. Repeat the above steps until the whole documentation is considered.
 
 So write the analysis like this:
+
+#### Rewriting the doc content
+<rewrite the doc content to make it more readable:
+- Add omitted premises if any to the other branches of the logic
+- Split the line with "or" logic into multiple lines
+
+For example: 
+- If s = A, return a
+- then check if t = B or if t = C, if so return x.
+- If not, then return y.
+
+After rewriting:
+- If s = A, return a
+- If not s = A then check t:
+    - If t = B, return x
+    - If t = C, return x (Here we only split the line with "or" logic into multiple lines, and we don't add not t = B here because t = C already implies not t = B)
+    - If not t = B and not t = C, return y
+
+By writing like this, you can see the premises for each line (branch) of doc by merging the upper level items.
+
 #### Requirement <0-n>
 ##### Doc content
 <repeat the line of the doc content you depend on to generate this requirement>
+    - If t = B, return x
 
 ##### Current premises 
 <list all the premises you have considered so far, like "Check valid returns success, input param is legal...">
+<This is can be done in the most cases by merging the upper level items of the doc content>
+<For example, for a structure like:
+If A:
+    - If B:
+        - If C:
+            - If D, then x
+            - If not D, then y
+Then the final line should have premises:
+- A
+- B
+- C
+- not D
+
+For example for the example line above, premises should be:
+- not s = A
 
 ##### Thinking
 <your thinking of how to describe this rule, and which premises are needed to combine with the doc content to generate this requirement>
+For example, just consider how to merge "not s = A" with "If t = B, return x"
 
 ##### Requirement
 <the requirement you finally write, by fusing the conditions from the doc content and premises that are not included in the doc content, and explaining the output and the database state changes>
+<Consider which premises can be merged together if some of them contain others, and how to explain the requirement in a concise but complete way>
+For example:
+- If not s = A and t = C, return x
 
-##### Updated premises
-<list all the premises you have considered so far after writing the requirement, if the requirement introduces new premises, add them to the list>
+In the next loop:
+The line is "- If not t = B and not t = C, return y"
+Since this line is parallel to the previous line, we only use "not s = A" as the premise, and not add "t = C" to the list.
+Then the premises are:
+- not s = A
+(By writing the doc in a structured itemized way, we can see the premises for each line (branch) of doc by merging the upper level items)
+
 
 Loop until you have considered all the doc content.
 

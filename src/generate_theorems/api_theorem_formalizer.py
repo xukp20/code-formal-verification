@@ -137,8 +137,6 @@ Step-by-step reasoning of your formalization process, following the structure be
     - What are the restrictions on the dependent APIs given the input params? Like the response of the dependent APIs given the current input params
     - What are the restrictions on the table states? Like the existence or non-existence of specific records in the table given the input params
     - How are these restrictions related together?
-        - If any two conditions are related use "or", they must be formalized into a single formal hypothesis to make sure their relationship is correct.
-        - If conditions with "or" logic are formalized separately, they will be forming a "and" logic in the theorem, which is not what we want.
 2. What are the inputs?
     - Do we need anymore inputs except the input parameters we have already included?
 3. What is the output?
