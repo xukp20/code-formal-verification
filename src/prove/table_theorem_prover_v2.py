@@ -241,43 +241,164 @@ theorem userLoginPreservesUniquePhoneNumbers
         self.max_examples = max_examples
         self.max_global_attempts = max_global_attempts
 
-    def _collect_examples(self, project: ProjectStructure, n: int, negative: bool = False) -> List[str]:
-        """Collect n random proved table theorems as examples"""
+    def _collect_examples(self, 
+                         project: ProjectStructure, 
+                         service: Service, 
+                         table: Table,
+                         property_id: int,
+                         n: int, 
+                         negative: bool = False,
+                         best_examples: bool = True) -> List[str]:
+        """Collect n random proved theorems as examples with a hierarchical strategy
+        
+        Args:
+            project: Project structure
+            service: Current service
+            table: Current table
+            property_id: Current property ID
+            n: Number of examples to collect
+            negative: Whether to collect negative theorems
+            best_examples: Whether to use hierarchical example collection
+        
+        Returns:
+            List of proved theorem contents
+        """
         proved_theorems = []
         
-        for service in project.services:
-            for table in service.tables:
-                if table.properties:
-                    for property in table.properties:
-                        if property.theorems:
-                            for theorem in property.theorems:
-                                if negative:
-                                    # Collect proved negative theorems
-                                    if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
-                                        proved_theorems.append(theorem.theorem_negative.generate_content())
-                                else:
-                                    # Collect proved positive theorems
-                                    if theorem.theorem and theorem.theorem.theorem_proved:
-                                        proved_theorems.append(theorem.theorem.generate_content())
-                        
-        # Randomly select n examples
-        if len(proved_theorems) > n:
-            return random.sample(proved_theorems, n)
+        if not best_examples:
+            # Original random collection across all services
+            for s in project.services:
+                for t in s.tables:
+                    if t.properties:
+                        for prop in t.properties:
+                            if prop.theorems:
+                                for theorem in prop.theorems:
+                                    if negative:
+                                        if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                                            proved_theorems.append(theorem.theorem_negative.generate_content())
+                                    else:
+                                        if theorem.theorem and theorem.theorem.theorem_proved:
+                                            proved_theorems.append(theorem.theorem.generate_content())
+            
+            return random.sample(proved_theorems, min(n, len(proved_theorems))) if proved_theorems else []
+        
+        # Hierarchical example collection
+        # 1. Look in current property
+        current_property = table.properties[property_id] if property_id < len(table.properties) else None
+        if current_property:
+            for theorem in current_property.theorems:
+                if negative:
+                    if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                        proved_theorems.append(theorem.theorem_negative.generate_content())
+                else:
+                    if theorem.theorem and theorem.theorem.theorem_proved:
+                        proved_theorems.append(theorem.theorem.generate_content())
+        
+        # 2. Look in same table's other properties
+        if len(proved_theorems) < n:
+            for prop_idx, prop in enumerate(table.properties):
+                if prop_idx == property_id:
+                    continue
+                for theorem in prop.theorems:
+                    if negative:
+                        if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                            proved_theorems.append(theorem.theorem_negative.generate_content())
+                    else:
+                        if theorem.theorem and theorem.theorem.theorem_proved:
+                            proved_theorems.append(theorem.theorem.generate_content())
+        
+        # 3. Look in same service's other tables
+        if len(proved_theorems) < n:
+            for other_table in service.tables:
+                if other_table == table:
+                    continue
+                if not other_table.properties:
+                    continue
+                for prop in other_table.properties:
+                    if not prop.theorems:
+                        continue
 
-        # For negative theorems, if not enough proved theorems, then use positive theorems
+                    for theorem in prop.theorems:
+                        if negative:
+                            if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                                proved_theorems.append(theorem.theorem_negative.generate_content())
+                        else:
+                            if theorem.theorem and theorem.theorem.theorem_proved:
+                                proved_theorems.append(theorem.theorem.generate_content())
+        
+        # 4. Look in all services
+        if len(proved_theorems) < n:
+            for s in project.services:
+                if s == service:
+                    continue
+                if not s.tables:
+                    continue
+                for other_table in s.tables:
+                    if not other_table.properties:
+                        continue
+                    for prop in other_table.properties:
+                        if not prop.theorems:
+                            continue
+                        for theorem in prop.theorems:
+                            if negative:
+                                if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                                    proved_theorems.append(theorem.theorem_negative.generate_content())
+                            else:
+                                if theorem.theorem and theorem.theorem.theorem_proved:
+                                    proved_theorems.append(theorem.theorem.generate_content())
+        
+        # If negative and still not enough, look for positive theorems
         if negative and len(proved_theorems) < n:
-            for service in project.services:
-                for table in service.tables:
-                    if table.properties:
-                        for property in table.properties:
-                            if property.theorems:
-                                for theorem in property.theorems:
-                                    if theorem.theorem and theorem.theorem.theorem_proved:
-                                        proved_theorems.append(theorem.theorem.generate_content())
-                                        if len(proved_theorems) >= n:
-                                            return proved_theorems
-                                        
-        return proved_theorems
+            # 1. Look in current property
+            if current_property:
+                for theorem in current_property.theorems:
+                    if theorem.theorem and theorem.theorem.theorem_proved:
+                        proved_theorems.append(theorem.theorem.generate_content())
+            
+            # 2. Look in same table's other properties
+            if len(proved_theorems) < n:
+                for prop_idx, prop in enumerate(table.properties):
+                    if prop_idx == property_id:
+                        continue
+                    if not prop.theorems:
+                        continue
+                    for theorem in prop.theorems:
+                        if theorem.theorem and theorem.theorem.theorem_proved:
+                            proved_theorems.append(theorem.theorem.generate_content())
+            
+            # 3. Look in same service's other tables
+            if len(proved_theorems) < n:
+                for other_table in service.tables:
+                    if other_table == table:
+                        continue
+                    if not other_table.properties:
+                        continue
+                    for prop in other_table.properties:
+                        if not prop.theorems:
+                            continue
+                        for theorem in prop.theorems:
+                            if theorem.theorem and theorem.theorem.theorem_proved:
+                                proved_theorems.append(theorem.theorem.generate_content())
+            
+            # 4. Look in all services
+            if len(proved_theorems) < n:
+                for s in project.services:
+                    if s == service:
+                        continue
+                    if not s.tables:
+                        continue
+                    for other_table in s.tables:
+                        if not other_table.properties:
+                            continue
+                        for prop in other_table.properties:
+                            if not prop.theorems:
+                                continue
+                            for theorem in prop.theorems:
+                                if theorem.theorem and theorem.theorem.theorem_proved:
+                                    proved_theorems.append(theorem.theorem.generate_content())
+        
+        # Randomly choose n examples, or return all if less than n
+        return random.sample(proved_theorems, min(n, len(proved_theorems))) if proved_theorems else []
 
     def _format_dependencies(self, service: Service, table: Table, api: APIFunction, project: ProjectStructure,
                              examples: List[LeanTheoremFile]) -> str:
@@ -584,15 +705,25 @@ theorem userLoginPreservesUniquePhoneNumbers
 
             # Process theorems in batches
             while theorem_queue:
-                # Collect fresh examples for this batch
-                examples = self._collect_examples(project, self.max_examples, negative=negative)
-                if logger:
-                    logger.info(f"Collected {len(examples)} proof examples for next batch")
-
                 # Create tasks for next batch of theorems
                 tasks = []
                 while len(tasks) < max_workers and theorem_queue:
                     task_tuple = theorem_queue.pop(0)
+                    service, table, theorem, property_id, theorem_id = task_tuple
+                    
+                    # Collect fresh examples for this specific task
+                    examples = self._collect_examples(
+                        project=project, 
+                        service=service, 
+                        table=table, 
+                        property_id=property_id,
+                        n=self.max_examples, 
+                        negative=negative
+                    )
+                    
+                    if logger:
+                        logger.debug(f"Collected {len(examples)} proof examples for table: {table.name}, property {property_id}, theorem {theorem_id}")
+                    
                     tasks.append(process_with_semaphore(task_tuple, examples))
 
                 # Process batch of theorems
@@ -668,7 +799,7 @@ theorem userLoginPreservesUniquePhoneNumbers
                                     continue
                             
                             # Collect fresh examples before each theorem attempt
-                            examples = self._collect_examples(project, self.max_examples, negative=negative)
+                            examples = self._collect_examples(project, service, table, property_id, self.max_examples, negative=negative)
                             if logger:
                                 logger.info(f"Collected {len(examples)} proof examples for {table.name} theorem {theorem_id}")
                             

@@ -250,39 +250,108 @@ theorem userLoginSuccessWhenCredentialsMatch
         self.max_examples = max_examples
         self.max_global_attempts = max_global_attempts
 
-    def _collect_examples(self, project: ProjectStructure, n: int, negative: bool = False) -> List[str]:
-        """Collect n random proved theorems as examples"""
+    def _collect_examples(self, 
+                         project: ProjectStructure, 
+                         service: Service, 
+                         api: APIFunction,
+                         n: int, 
+                         negative: bool = False,
+                         best_examples: bool = True) -> List[str]:
+        """Collect n random proved theorems as examples with a hierarchical strategy
+        
+        Args:
+            project: Project structure
+            service: Current service
+            api: Current API
+            n: Number of examples to collect
+            negative: Whether to collect negative theorems
+            best_examples: Whether to use hierarchical example collection
+        
+        Returns:
+            List of proved theorem contents
+        """
         proved_theorems = []
         
-        for service in project.services:
-            for api in service.apis:
-                if api.theorems:
-                    for theorem in api.theorems:
+        if not best_examples:
+            # Original random collection across all services
+            for s in project.services:
+                for a in s.apis:
+                    if a.theorems:
+                        for theorem in a.theorems:
+                            if negative:
+                                if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                                    proved_theorems.append(theorem.theorem_negative.generate_content())
+                            else:
+                                if theorem.theorem and theorem.theorem.theorem_proved:
+                                    proved_theorems.append(theorem.theorem.generate_content())
+            
+            return random.sample(proved_theorems, min(n, len(proved_theorems))) if proved_theorems else []
+        
+        # Hierarchical example collection
+        # 1. Look in current API
+        for theorem in api.theorems:
+            if negative:
+                if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                    proved_theorems.append(theorem.theorem_negative.generate_content())
+            else:
+                if theorem.theorem and theorem.theorem.theorem_proved:
+                    proved_theorems.append(theorem.theorem.generate_content())
+        
+        # If not enough, look in same service
+        if len(proved_theorems) < n:
+            for other_api in service.apis:
+                if other_api == api:
+                    continue
+                for theorem in other_api.theorems:
+                    if negative:
+                        if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
+                            proved_theorems.append(theorem.theorem_negative.generate_content())
+                    else:
+                        if theorem.theorem and theorem.theorem.theorem_proved:
+                            proved_theorems.append(theorem.theorem.generate_content())
+        
+        # If still not enough, look in all services
+        if len(proved_theorems) < n:
+            for s in project.services:
+                if s == service:
+                    continue
+                for other_api in s.apis:
+                    for theorem in other_api.theorems:
                         if negative:
-                            # Collect proved negative theorems
                             if theorem.theorem_negative and theorem.theorem_negative.theorem_proved:
                                 proved_theorems.append(theorem.theorem_negative.generate_content())
                         else:
-                            # Collect proved positive theorems
                             if theorem.theorem and theorem.theorem.theorem_proved:
                                 proved_theorems.append(theorem.theorem.generate_content())
-                        
-        # Randomly select n examples
-        if len(proved_theorems) > n:
-            return random.sample(proved_theorems, n)
-
-        # For negative theorems, if not enough proved theorems, then use positive theorems
+        
+        # If negative and still not enough, look for positive theorems
         if negative and len(proved_theorems) < n:
-            for service in project.services:
-                for api in service.apis:
-                    if api.theorems:
-                        for theorem in api.theorems:
+            # 1. Look in current API for positive theorems
+            for theorem in api.theorems:
+                if theorem.theorem and theorem.theorem.theorem_proved:
+                    proved_theorems.append(theorem.theorem.generate_content())
+            
+            # 2. Look in same service
+            if len(proved_theorems) < n:
+                for other_api in service.apis:
+                    if other_api == api:
+                        continue
+                    for theorem in other_api.theorems:
+                        if theorem.theorem and theorem.theorem.theorem_proved:
+                            proved_theorems.append(theorem.theorem.generate_content())
+            
+            # 3. Look in all services
+            if len(proved_theorems) < n:
+                for s in project.services:
+                    if s == service:
+                        continue
+                    for other_api in s.apis:
+                        for theorem in other_api.theorems:
                             if theorem.theorem and theorem.theorem.theorem_proved:
                                 proved_theorems.append(theorem.theorem.generate_content())
-                                if len(proved_theorems) >= n:
-                                    return proved_theorems
-
-        return proved_theorems
+        
+        # Randomly choose n examples, or return all if less than n
+        return random.sample(proved_theorems, min(n, len(proved_theorems))) if proved_theorems else []
 
     def _format_dependencies(self, service: Service, api: APIFunction, project: ProjectStructure, 
                            examples: List[LeanTheoremFile]) -> str:
@@ -588,15 +657,25 @@ theorem userLoginSuccessWhenCredentialsMatch
 
             # Process theorems in batches
             while theorem_queue:
-                # Collect fresh examples for this batch
-                examples = self._collect_examples(project, self.max_examples, negative=negative)
-                if logger:
-                    logger.info(f"Collected {len(examples)} proof examples for next batch")
-
                 # Create tasks for next batch of theorems
                 tasks = []
                 while len(tasks) < max_workers and theorem_queue:
                     task_tuple = theorem_queue.pop(0)
+                    service, api, theorem, theorem_id = task_tuple
+                    
+                    # Collect fresh examples for this specific task
+                    examples = self._collect_examples(
+                        project=project, 
+                        service=service, 
+                        api=api, 
+                        n=self.max_examples, 
+                        negative=negative
+                    )
+                    
+                    if logger:
+                        # TODO: to be debug log
+                        logger.info(f"Collected {len(examples)} proof examples for API: {api.name}, theorem {theorem_id}")
+                    
                     tasks.append(process_with_semaphore(task_tuple, examples))
 
                 # Process batch of theorems
@@ -678,7 +757,7 @@ theorem userLoginSuccessWhenCredentialsMatch
                                 continue
                             
                         # Collect fresh examples before each theorem attempt
-                        examples = self._collect_examples(project, self.max_examples, negative=negative)
+                        examples = self._collect_examples(project, service, api, self.max_examples, negative)
                         if logger:
                             logger.info(f"Collected {len(examples)} proof examples for {api.name} theorem {id}")
                         
