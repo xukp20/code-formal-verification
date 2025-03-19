@@ -80,9 +80,20 @@ Return both the corrected code and parsed fields.
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
 
-    def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3):
+    def __init__(self, 
+                 model: str = "qwen-max-latest", 
+                 max_retries: int = 3,
+                 max_global_attempts: int = 5):
+        """Initialize table formalizer
+        
+        Args:
+            model: Model to use for LLM calls
+            max_retries: Maximum attempts per table formalization
+            max_global_attempts: Maximum global attempts if all tables fail
+        """
         self.model = model
         self.max_retries = max_retries
+        self.max_global_attempts = max_global_attempts
 
     @staticmethod
     def _format_dependencies(project: ProjectStructure, service: Service, 
@@ -121,7 +132,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         ]
         return "\n".join(parts)
 
-    async def formalize_table(self, project: ProjectStructure, service: Service, 
+    async def formalize_table_once(self, project: ProjectStructure, service: Service, 
                             table: Table, logger: Logger = None) -> bool:
         """Formalize a single table"""
         if logger:
@@ -211,6 +222,21 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         if logger:
             logger.error(f"Failed to formalize table {table.name} after {self.max_retries} attempts")
         
+        return False
+
+    async def formalize_table(self, project: ProjectStructure, service: Service, 
+                            table: Table, logger: Logger = None) -> bool:
+        """Formalize a single table"""
+        for global_attempt in range(self.max_global_attempts):
+            success = await self.formalize_table_once(project, service, table, logger)
+            if success:
+                return True
+            else:
+                if logger:
+                    logger.info(f"Failed to formalize table {table.name} in global attempt {global_attempt + 1}, retrying")
+
+        if logger:
+            logger.error(f"[FAILED] Failed to formalize table {table.name} after {self.max_global_attempts} global attempts")
         return False
 
     async def formalize(self, project: ProjectStructure, logger: Logger = None) -> ProjectStructure:

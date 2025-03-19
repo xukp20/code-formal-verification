@@ -57,7 +57,7 @@ max_theorem_retries=8
 max_global_attempts=5
 max_examples=3
 
-max_workers=4
+max_workers=16
 
 random_seed=1234
 

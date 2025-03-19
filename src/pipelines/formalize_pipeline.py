@@ -204,9 +204,9 @@ def main():
     # Model settings
     parser.add_argument("--model", default="gpt-4-1106-preview",
                       help="Model to use for analysis and formalization")
-    parser.add_argument("--table-formalizer-retries", type=int, default=3,
+    parser.add_argument("--table-formalizer-retries", type=int, default=5,
                       help="Maximum retries for table formalizer")
-    parser.add_argument("--api-formalizer-retries", type=int, default=8,
+    parser.add_argument("--api-formalizer-retries", type=int, default=10,
                       help="Maximum retries for API formalizer")
     
     # Logging settings

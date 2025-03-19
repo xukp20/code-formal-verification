@@ -46,10 +46,10 @@ log_level="INFO"
 # log_level="DEBUG"
 
 # task="formalize"
-# task="theorem_generate"
-task="prove"
+task="theorem_generate"
+# task="prove"
 
-max_theorem_retries=5
+max_theorem_retries=8
 max_global_attempts=5
 max_examples=3
 

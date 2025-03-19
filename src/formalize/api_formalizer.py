@@ -320,9 +320,10 @@ Return both the corrected code and parsed fields.
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily.
 """
 
-    def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3):
+    def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3, max_global_attempts: int = 5):
         self.model = model
         self.max_retries = max_retries
+        self.max_global_attempts = max_global_attempts
 
     @staticmethod
     def _format_table_dependencies(project: ProjectStructure, service: Service, 
@@ -428,7 +429,7 @@ Make sure you have "### Output\n```json" in your response so that I can find the
                 return warning_text
         return None
 
-    async def formalize_api(self, project: ProjectStructure, service: Service, 
+    async def formalize_api_once(self, project: ProjectStructure, service: Service, 
                            api: APIFunction, table_deps: List[str], 
                            api_deps: List[Tuple[str, str]], 
                            logger: Logger = None) -> bool:
@@ -550,6 +551,23 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         
         if logger:
             logger.error(f"Failed to formalize API {api.name} after {self.max_retries} attempts")
+        return False
+
+    async def formalize_api(self, project: ProjectStructure, service: Service, 
+                           api: APIFunction, table_deps: List[str], 
+                           api_deps: List[Tuple[str, str]], 
+                           logger: Logger = None) -> bool:
+        """Formalize API once"""
+        for i in range(self.max_global_attempts):
+            success = await self.formalize_api_once(project, service, api, table_deps, api_deps, logger)
+            if success:
+                return True
+            else:
+                if logger:
+                    logger.warning(f"Failed to formalize API {api.name} at global attempt {i+1}")
+                    
+        if logger:
+            logger.error(f"[FAILED] Failed to formalize API {api.name} after {self.max_global_attempts} global attempts")
         return False
 
     async def _formalize_parallel(self, project: ProjectStructure, logger: Logger = None, max_workers: int = 1) -> ProjectStructure:
