@@ -20,15 +20,7 @@ Analyze the provided API documentation and split it into individual API descript
 2. Matching sections to the provided API list
 3. Ensuring each API has clear documentation
 
-Return your analysis in two parts:
-### Analysis
-Step-by-step reasoning of your documentation splitting process
-- First, find out all the services and the names of the APIs in each service
-- Then, for each service, write a "## ServiceName" title, and then:
-    - Look for the documentation of each API in the service section
-    - Write the documentation for each API in the format of "### API Name\nAPI documentation text"
-- After that, write all the API documentation in the format of "### Output\n```json"
-- Make sure no API is duplicated or missing
+Return your output in the format of "### Output\n```json"
 
 ### Output
 ```json
@@ -53,8 +45,9 @@ Important:
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
-    def __init__(self, model: str = "qwen-max-latest"):
+    def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3):
         self.model = model
+        self.max_retries = max_retries
 
     @staticmethod
     def _format_api_list(project: ProjectStructure) -> str:
@@ -70,16 +63,19 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         """Validate API documentation coverage and structure"""
         for service in project.services:
             if service.name not in docs:
-                raise ValueError(f"Missing documentation for service: {service.name}")
-                
+                # raise ValueError(f"Missing documentation for service: {service.name}")
+                return False
             service_docs = docs[service.name]
             for api in service.apis:
                 if api.name not in service_docs:
-                    raise ValueError(f"Missing documentation for API: {service.name}.{api.name}")
+                    # raise ValueError(f"Missing documentation for API: {service.name}.{api.name}")
+                    return False
                 if not service_docs[api.name].strip():
-                    raise ValueError(f"Empty documentation for API: {service.name}.{api.name}")
+                    # raise ValueError(f"Empty documentation for API: {service.name}.{api.name}")
+                    return False
+        return True
 
-    async def split_docs(self, 
+    async def split_docs_once(self, 
                         project: ProjectStructure,
                         doc_path: Path,
                         logger: Optional[Logger] = None) -> Dict[str, Dict[str, str]]:
@@ -95,7 +91,10 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         user_prompt = f"""# API Documentation
 {doc_content}
 
-{api_list}"""
+{api_list}
+
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
         if logger:
             logger.model_input(f"Doc split prompt:\n{user_prompt}")
@@ -105,7 +104,8 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             model=self.model,
             system_prompt=self.ROLE_PROMPT,
             user_prompt=self.SYSTEM_PROMPT + "\n\n" + user_prompt,
-            temperature=0.0
+            temperature=0.0,
+            max_tokens=8192
         )
 
         if logger:
@@ -116,9 +116,21 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()
             docs = json.loads(json_str)
         except Exception as e:
-            raise ValueError(f"Failed to parse API doc split response: {e}")
-            
+            # raise ValueError(f"Failed to parse API doc split response: {e}")
+            return None
         # Validate results
-        self._validate_docs(docs, project)
+        if not self._validate_docs(docs, project):
+            return None
         
         return docs 
+    
+    async def split_docs(self, 
+                        project: ProjectStructure,
+                        doc_path: Path,
+                        logger: Optional[Logger] = None) -> Dict[str, Dict[str, str]]:
+        """Split project documentation into per-API documentation"""
+        for _ in range(self.max_retries):
+            docs = await self.split_docs_once(project, doc_path, logger)
+            if docs:
+                return docs
+        raise ValueError(f"Failed to split documentation for project: {project.name}")

@@ -164,14 +164,18 @@ Step-by-step reasoning of your formalization process, following the structure be
 2. Then, try to formalize each part into a statement in Lean. Like the conditions, determine if you need to use an existing helper function or create a new one, or just write it directly
     - If you find the implementation of the API file missing some essential parts that you need to formalize the theorem, you should consider it as a potential bug, which will be presented in the ### Warning section later. But you should still try your best to formalize the theorem based on the information you have.
         - For example, if the return type of the API has no "NoPermissionError" type, but the requirement describes that the output type should be no permission error, you should point it out here, but try to find the closest type you can use to represent the requirement.
+    - If you find some dependent APIs explained in the requirement is not given or not used in the implementation of the API function, you should point it out here, but try to find the closest way to formalize the requirement. Mark it as a potential bug.
     - Consider how to formalize the table state changes in the conclusion: Use new record, removed record or updated record. Or if you really need to check the whole table, make sure the new record is added to the end of the list.
 3. Repeat the above steps until all the parts are written as statements in Lean
 4. Combine all the statements into a single conclusion, you may need to use the logic of `and`, `or`, `not`, `implies` and `iff` to combine them. Write the logic notations in Lean.
 
 #### Summary 
 In this part, you should go through the analysis above to:
+- Repeat the original requirement as comment here, so that you will make sure the requirement is not changed
 - Construct the final theorem statement, the proof should be `sorry`
 - Collect all the potential warnings here
+    - Missing return types in API functions, which may lead to theorem statement not equal to the requirement
+    - Missing dependent APIs in the implementation of the API function, which may lead to theorem statement not equal to the requirement
 
 After these steps, you should have a complete theorem statement. Now put it in the ### Lean Code:
 
@@ -184,7 +188,8 @@ After these steps, you should have a complete theorem statement. Now put it in t
 ### Warning 
 (Optional)
 If you notice any potential formalization issues that prevent you from writing a theorem statement, describe them here, with a title of "### Warning". For example:
-- Missing return types in API functions
+- Missing return types in API functions, which may lead to theorem statement not equal to the requirement
+- Missing dependent APIs in the implementation of the API function, which may lead to theorem statement not equal to the requirement
 If you notice some issues but that doesn't lead to compilation errors, you should not include this section and try to do the formalization with the given formalization.
 Don't include this section in the output json.
 - If there is no warning, put a single word "None" for this part, without any other words
@@ -194,7 +199,7 @@ Don't include this section in the output json.
 {{
   "imports": "string of import statements and open commands",
   "helper_functions": "string of helper function definitions or type definitions",
-  "comment": "/- string of original requirement as comment, write as a Lean comment -/",
+  "comment": "/- string of original requirement as comment, must not be modified, write as a Lean comment -/",
   "theorem_unproved": "string of theorem statement with sorry"
 }}
 ```

@@ -172,10 +172,11 @@ Example:
 
 Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
-    def __init__(self, model: str = "qwen-max-latest"):
+    def __init__(self, model: str = "qwen-max-latest", max_retries: int = 3):
         self.model = model
+        self.max_retries = max_retries
 
-    async def generate_requirements(self,
+    async def generate_requirements_once(self,
                                  api_name: str,
                                  api_doc: str,
                                  logger: Optional[Logger] = None) -> List[str]:
@@ -184,7 +185,9 @@ Make sure you have "### Output\n```json" in your response so that I can find the
 {api_name}
 
 # Documentation
-{api_doc}"""
+{api_doc}
+
+Make sure you have "### Output\n```json" in your response so that I can find the Json easily."""
 
         if logger:
             logger.model_input(f"Requirement generation prompt for {api_name}:\n{user_prompt}")
@@ -205,12 +208,26 @@ Make sure you have "### Output\n```json" in your response so that I can find the
             json_str = response.split("### Output\n```json")[-1].split("```")[0].strip()
             requirements = json.loads(json_str)
         except Exception as e:
-            raise ValueError(f"Failed to parse requirement generation response for {api_name}: {e}")
+            # raise ValueError(f"Failed to parse requirement generation response for {api_name}: {e}")
+            return None
             
         # Validate requirements
         if not requirements:
-            raise ValueError(f"No requirements generated for API: {api_name}")
+            # raise ValueError(f"No requirements generated for API: {api_name}")
+            return None
         if not all(isinstance(r, str) and r.strip() for r in requirements):
-            raise ValueError(f"Invalid requirements format for API: {api_name}")
+            # raise ValueError(f"Invalid requirements format for API: {api_name}")
+            return None
             
         return requirements 
+    
+    async def generate_requirements(self,
+                                 api_name: str,
+                                 api_doc: str,
+                                 logger: Optional[Logger] = None) -> List[str]:
+        """Generate requirements for a single API"""
+        for _ in range(self.max_retries):
+            requirements = await self.generate_requirements_once(api_name, api_doc, logger)
+            if requirements:
+                return requirements
+        raise ValueError(f"Failed to generate requirements for API: {api_name}")

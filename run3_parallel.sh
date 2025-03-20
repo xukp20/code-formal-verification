@@ -29,7 +29,7 @@ prover_model="deepseek-r1"
 add_mathlib=false
 
 
-project_name="Email"
+project_name="Taxi"
 
 # if has $1, load project_name from $1
 if [ -n "$1" ]; then
@@ -43,11 +43,11 @@ output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="INFO"
-# log_level="DEBUG"
+log_level="DEBUG"
 
 # task="formalize"
-# task="theorem_generate"
-task="prove"
+task="theorem_generate"
+# task="prove"
 
 max_theorem_retries=8
 max_global_attempts=5
