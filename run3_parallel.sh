@@ -43,11 +43,11 @@ output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
 
 log_level="INFO"
-log_level="DEBUG"
+# log_level="DEBUG"
 
 # task="formalize"
-task="theorem_generate"
-# task="prove"
+# task="theorem_generate"
+task="prove"
 
 max_theorem_retries=8
 max_global_attempts=5

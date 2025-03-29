@@ -28,4 +28,4 @@ mkdir -p lean_project
 # $command
 
 
-python src/tools/theorem_analyzer.py -p outputs/EmailV3/prove/completed.json
+python src/tools/theorem_analyzer.py -p outputs/TaxiV3/prove/completed.json
