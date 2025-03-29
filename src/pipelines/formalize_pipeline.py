@@ -50,6 +50,7 @@ class FormalizationPipeline(PipelineBase):
                  log_model_io: bool = False,
                  continue_from: bool = False,
                  start_state: Optional[str] = None,
+                 end_state: Optional[str] = None,
                  add_mathlib: bool = False):
         """Initialize formalization pipeline"""
         super().__init__(
@@ -59,7 +60,8 @@ class FormalizationPipeline(PipelineBase):
             log_level=log_level,
             log_model_io=log_model_io,
             continue_from=continue_from,
-            start_state=start_state
+            start_state=start_state,
+            end_state=end_state
         )
         
         self.project_base_path = project_base_path
@@ -98,6 +100,10 @@ class FormalizationPipeline(PipelineBase):
         project = None
         if start_state == FormalizationState.INIT:
             self.save_state(FormalizationState.INIT)
+            if not self.should_continue(FormalizationState.INIT):
+                self.logger.info("Reached end state, stopping pipeline")
+                return True
+                
             self.logger.info("1. Parsing project structure...")
             success, message, project = init_project(
                 project_name=self.project_name,
@@ -115,6 +121,10 @@ class FormalizationPipeline(PipelineBase):
         # Analyze table dependencies
         if start_state <= FormalizationState.TABLE_DEPENDENCY:
             self.save_state(FormalizationState.TABLE_DEPENDENCY)
+            if not self.should_continue(FormalizationState.TABLE_DEPENDENCY):
+                self.logger.info("Reached end state, stopping pipeline")
+                return True
+                
             self.logger.info("2. Analyzing table dependencies...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(FormalizationState.INIT))
@@ -127,6 +137,10 @@ class FormalizationPipeline(PipelineBase):
         # Formalize tables
         if start_state <= FormalizationState.TABLE_FORMALIZATION:
             self.save_state(FormalizationState.TABLE_FORMALIZATION)
+            if not self.should_continue(FormalizationState.TABLE_FORMALIZATION):
+                self.logger.info("Reached end state, stopping pipeline")
+                return True
+                
             self.logger.info("3. Formalizing tables...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(FormalizationState.TABLE_DEPENDENCY))
@@ -142,6 +156,10 @@ class FormalizationPipeline(PipelineBase):
         # Analyze API-table dependencies
         if start_state <= FormalizationState.API_TABLE_DEPENDENCY:
             self.save_state(FormalizationState.API_TABLE_DEPENDENCY)
+            if not self.should_continue(FormalizationState.API_TABLE_DEPENDENCY):
+                self.logger.info("Reached end state, stopping pipeline")
+                return True
+                
             self.logger.info("4. Analyzing API-table dependencies...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(FormalizationState.TABLE_FORMALIZATION))
@@ -154,6 +172,10 @@ class FormalizationPipeline(PipelineBase):
         # Analyze API-API dependencies
         if start_state <= FormalizationState.API_DEPENDENCY:
             self.save_state(FormalizationState.API_DEPENDENCY)
+            if not self.should_continue(FormalizationState.API_DEPENDENCY):
+                self.logger.info("Reached end state, stopping pipeline")
+                return True
+                
             self.logger.info("5. Analyzing API-API dependencies...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(FormalizationState.API_TABLE_DEPENDENCY))
@@ -166,6 +188,10 @@ class FormalizationPipeline(PipelineBase):
         # Formalize APIs
         if start_state <= FormalizationState.API_FORMALIZATION:
             self.save_state(FormalizationState.API_FORMALIZATION)
+            if not self.should_continue(FormalizationState.API_FORMALIZATION):
+                self.logger.info("Reached end state, stopping pipeline")
+                return True
+                
             self.logger.info("6. Formalizing APIs...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(FormalizationState.API_DEPENDENCY))
@@ -178,13 +204,15 @@ class FormalizationPipeline(PipelineBase):
             self.save_output(FormalizationState.API_FORMALIZATION, project.to_dict())
             self.logger.info("APIs formalized")
 
-        self.save_state(FormalizationState.COMPLETED)
-
-        if not project:
-            project = ProjectStructure.from_dict(self.load_output(FormalizationState.API_FORMALIZATION))
-        self.save_output(FormalizationState.COMPLETED, project.to_dict())
-
-        self.logger.info("Formalization pipeline completed successfully")
+        if self.should_continue(FormalizationState.COMPLETED):
+            self.save_state(FormalizationState.COMPLETED)
+            if not project:
+                project = ProjectStructure.from_dict(self.load_output(FormalizationState.API_FORMALIZATION))
+            self.save_output(FormalizationState.COMPLETED, project.to_dict())
+            self.logger.info("Formalization pipeline completed successfully")
+        else:
+            self.logger.info("Reached end state, stopping pipeline")
+            
         return True
     
 def main():
@@ -222,6 +250,9 @@ def main():
     parser.add_argument("--start-state", 
                       choices=[s.name for s in FormalizationState],
                       help="Start from specific state (requires --continue)")
+    parser.add_argument("--end-state",
+                      choices=[s.name for s in FormalizationState],
+                      help="End at specific state")
         
     # Lean settings
     parser.add_argument("--add-mathlib", action="store_true",
@@ -257,6 +288,7 @@ def main():
         log_model_io=args.log_model_io,
         continue_from=args.continue_from,
         start_state=args.start_state,
+        end_state=args.end_state,
         add_mathlib=args.add_mathlib
     )
     

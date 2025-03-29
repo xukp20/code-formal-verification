@@ -17,7 +17,8 @@ class PipelineBase(ABC):
                  log_level: str = "INFO",
                  log_model_io: bool = False,
                  continue_from: bool = False,
-                 start_state: Optional[str] = None):
+                 start_state: Optional[str] = None,
+                 end_state: Optional[str] = None):
         """Initialize pipeline
         
         Args:
@@ -28,11 +29,13 @@ class PipelineBase(ABC):
             log_model_io: Whether to log model inputs/outputs
             continue_from: Whether to continue from last state
             start_state: Specific state to start from (requires continue_from)
+            end_state: Specific state to end at (optional)
         """
         self.project_name = project_name
         self.output_path = Path(output_base_path) / project_name / pipeline_dir
         self.continue_from = continue_from
         self.start_state = self._parse_state(start_state) if start_state else None
+        self.end_state = self._parse_state(end_state) if end_state else None
         
         # Create output directory
         self.output_path.mkdir(parents=True, exist_ok=True)
@@ -103,6 +106,19 @@ class PipelineBase(ABC):
             return self.start_state
             
         return current_state
+
+    def should_continue(self, current_state: Enum) -> bool:
+        """Check if pipeline should continue to next state
+        
+        Args:
+            current_state: Current pipeline state
+            
+        Returns:
+            True if pipeline should continue, False if it should stop
+        """
+        if self.end_state is None:
+            return True
+        return current_state <= self.end_state
 
     def save_output(self, state: Enum, data: Any) -> None:
         """Save pipeline output for a state"""

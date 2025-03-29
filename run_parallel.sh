@@ -16,6 +16,7 @@ mkdir -p outputs
 mkdir -p lean_project
 
 model="qwen-max-latest"
+# model="deepseek-v3"
 # model="o1-mini"
 # model="gpt-4o-mini"
 # model="qwq-plus"
@@ -50,8 +51,8 @@ log_level="INFO"
 # log_level="DEBUG"
 
 # task="formalize"
-# task="theorem_generate"
-task="prove"
+task="theorem_generate"
+# task="prove"
 
 max_theorem_retries=8
 max_global_attempts=5
@@ -59,14 +60,26 @@ max_examples=3
 
 max_workers=16
 
-random_seed=1234
+random_seed=4321
+# random_seed=42
+# random_seed=1234
+
+if [ -n "$2" ]; then
+    random_seed=$2
+fi
 
 # continue=true
-# start_state="API_THEOREMS"
+
+# start_state="TABLE_FORMALIZATION"
+# start_state="API_TABLE_DEPENDENCY"
 # start_state="API_FORMALIZATION"
-# start_state="TABLE_THEOREMS"
-# start_state="API_NEGATIVE_GENERATION"
-# start_state="API_NEGATIVE_THEOREMS"
+
+# end_state="TABLE_DEPENDENCY"
+# end_state="TABLE_FORMALIZATION"
+# end_state="API_DEPENDENCY"
+# end_state="API_FORMALIZATION"
+
+end_state="API_REQUIREMENTS"
 
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \
@@ -117,6 +130,10 @@ fi
 
 if [ "$start_state" != "" ]; then
     command="$command --start-state $start_state"
+fi
+
+if [ "$end_state" != "" ]; then
+    command="$command --end-state $end_state"
 fi
 
 eval $command
