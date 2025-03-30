@@ -60,26 +60,31 @@ max_examples=3
 
 max_workers=16
 
-# random_seed=4321
+random_seed=4321
 # random_seed=42
-random_seed=1234
+# random_seed=1234
+
 
 if [ -n "$2" ]; then
     random_seed=$2
 fi
 
-# continue=true
+continue=true
 
 # start_state="TABLE_FORMALIZATION"
 # start_state="API_TABLE_DEPENDENCY"
 # start_state="API_FORMALIZATION"
+
+start_state="API_THEOREMS"
 
 # end_state="TABLE_DEPENDENCY"
 # end_state="TABLE_FORMALIZATION"
 # end_state="API_DEPENDENCY"
 # end_state="API_FORMALIZATION"
 
-end_state="API_REQUIREMENTS"
+# end_state="API_REQUIREMENTS"
+end_state="API_THEOREMS"
+
 
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \

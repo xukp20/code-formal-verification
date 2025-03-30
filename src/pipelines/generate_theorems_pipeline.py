@@ -4,6 +4,7 @@ from typing import Optional
 import asyncio
 import argparse
 import json
+import os
 
 from src.pipelines.base import PipelineBase
 from src.types.project import ProjectStructure
@@ -94,11 +95,11 @@ class TheoremGenerationPipeline(PipelineBase):
         # Load formalized project structure
         project = None
         if start_state == TheoremGenerationState.INIT:
+            self.save_state(TheoremGenerationState.INIT)
             if not self.should_continue(TheoremGenerationState.INIT):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(TheoremGenerationState.INIT)
             self.logger.info("1. Loading formalized project structure...")
             try:
                 with open(self.formalize_output_path) as f:
@@ -112,11 +113,11 @@ class TheoremGenerationPipeline(PipelineBase):
 
         # Generate API requirements
         if start_state <= TheoremGenerationState.API_REQUIREMENTS:
+            self.save_state(TheoremGenerationState.API_REQUIREMENTS)
             if not self.should_continue(TheoremGenerationState.API_REQUIREMENTS):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(TheoremGenerationState.API_REQUIREMENTS)
             self.logger.info("2. Generating API requirements...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.INIT))
@@ -128,11 +129,11 @@ class TheoremGenerationPipeline(PipelineBase):
 
         # Formalize API theorems
         if start_state <= TheoremGenerationState.API_THEOREMS:
+            self.save_state(TheoremGenerationState.API_THEOREMS)
             if not self.should_continue(TheoremGenerationState.API_THEOREMS):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(TheoremGenerationState.API_THEOREMS)
             self.logger.info("3. Formalizing API theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.API_REQUIREMENTS))
@@ -147,11 +148,11 @@ class TheoremGenerationPipeline(PipelineBase):
 
         # Analyze table properties
         if start_state <= TheoremGenerationState.TABLE_PROPERTIES:
+            self.save_state(TheoremGenerationState.TABLE_PROPERTIES)
             if not self.should_continue(TheoremGenerationState.TABLE_PROPERTIES):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(TheoremGenerationState.TABLE_PROPERTIES)
             self.logger.info("4. Analyzing table properties...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.API_THEOREMS))
@@ -163,11 +164,11 @@ class TheoremGenerationPipeline(PipelineBase):
 
         # Formalize table theorems
         if start_state <= TheoremGenerationState.TABLE_THEOREMS:
+            self.save_state(TheoremGenerationState.TABLE_THEOREMS)
             if not self.should_continue(TheoremGenerationState.TABLE_THEOREMS):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(TheoremGenerationState.TABLE_THEOREMS)
             self.logger.info("5. Formalizing table theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(TheoremGenerationState.TABLE_PROPERTIES))
@@ -249,6 +250,8 @@ def main():
     if args.random_seed:
         import random
         random.seed(args.random_seed)
+        # Set environment variable for API calls
+        os.environ['random_seed'] = str(args.random_seed)
 
     # Set default formalize output path if not provided
     if not args.formalize_output_path:

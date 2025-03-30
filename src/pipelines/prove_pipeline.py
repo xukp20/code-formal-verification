@@ -4,6 +4,7 @@ from typing import Optional
 import asyncio
 import argparse
 import json
+import os
 
 from src.pipelines.base import PipelineBase
 from src.types.project import ProjectStructure
@@ -105,11 +106,11 @@ class ProvePipeline(PipelineBase):
         # Load theorem project structure
         project = None
         if start_state == ProveState.INIT:
+            self.save_state(ProveState.INIT)
             if not self.should_continue(ProveState.INIT):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(ProveState.INIT)
             self.logger.info("1. Loading theorem project structure...")
             with open(self.theorem_output_path) as f:
                 project = ProjectStructure.from_dict(json.load(f))
@@ -119,11 +120,11 @@ class ProvePipeline(PipelineBase):
 
         # Prove API theorems
         if start_state <= ProveState.API_THEOREMS:
+            self.save_state(ProveState.API_THEOREMS)
             if not self.should_continue(ProveState.API_THEOREMS):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(ProveState.API_THEOREMS)
             self.logger.info("2. Proving API theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.INIT))
@@ -140,11 +141,11 @@ class ProvePipeline(PipelineBase):
 
         # Prove table theorems
         if start_state <= ProveState.TABLE_THEOREMS:
+            self.save_state(ProveState.TABLE_THEOREMS)
             if not self.should_continue(ProveState.TABLE_THEOREMS):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(ProveState.TABLE_THEOREMS)
             self.logger.info("3. Proving table theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.API_THEOREMS))
@@ -161,11 +162,11 @@ class ProvePipeline(PipelineBase):
 
         # Generate API negative theorems
         if start_state <= ProveState.API_NEGATIVE_GENERATION:
+            self.save_state(ProveState.API_NEGATIVE_GENERATION)
             if not self.should_continue(ProveState.API_NEGATIVE_GENERATION):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(ProveState.API_NEGATIVE_GENERATION)
             self.logger.info("4. Generating API negative theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_THEOREMS))
@@ -180,11 +181,11 @@ class ProvePipeline(PipelineBase):
 
         # Prove API negative theorems
         if start_state <= ProveState.API_NEGATIVE_THEOREMS:
+            self.save_state(ProveState.API_NEGATIVE_THEOREMS)
             if not self.should_continue(ProveState.API_NEGATIVE_THEOREMS):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(ProveState.API_NEGATIVE_THEOREMS)
             self.logger.info("5. Proving API negative theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.API_NEGATIVE_GENERATION))
@@ -201,11 +202,11 @@ class ProvePipeline(PipelineBase):
 
         # Generate table negative theorems
         if start_state <= ProveState.TABLE_NEGATIVE_GENERATION:
+            self.save_state(ProveState.TABLE_NEGATIVE_GENERATION)
             if not self.should_continue(ProveState.TABLE_NEGATIVE_GENERATION):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(ProveState.TABLE_NEGATIVE_GENERATION)
             self.logger.info("6. Generating table negative theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.API_NEGATIVE_THEOREMS))
@@ -220,11 +221,11 @@ class ProvePipeline(PipelineBase):
 
         # Prove table negative theorems
         if start_state <= ProveState.TABLE_NEGATIVE_THEOREMS:
+            self.save_state(ProveState.TABLE_NEGATIVE_THEOREMS)
             if not self.should_continue(ProveState.TABLE_NEGATIVE_THEOREMS):
                 self.logger.info("Reached end state, stopping pipeline")
                 return True
                 
-            self.save_state(ProveState.TABLE_NEGATIVE_THEOREMS)
             self.logger.info("7. Proving table negative theorems...")
             if not project:
                 project = ProjectStructure.from_dict(self.load_output(ProveState.TABLE_NEGATIVE_GENERATION))
@@ -311,7 +312,9 @@ def main():
 
     if args.random_seed:
         import random
-        random.seed(args.random_seed)   
+        random.seed(args.random_seed)
+        # Set environment variable for API calls
+        os.environ['random_seed'] = str(args.random_seed)
 
     pipeline = ProvePipeline(
         project_name=args.project_name,

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 import asyncio
 import argparse
+import os
 
 from src.pipelines.base import PipelineBase
 from src.types.project import ProjectStructure
@@ -274,6 +275,8 @@ def main():
     if args.random_seed:
         import random
         random.seed(args.random_seed)
+        # Set environment variable for API calls
+        os.environ['random_seed'] = str(args.random_seed)
 
     pipeline = FormalizationPipeline(
         project_name=args.project_name,

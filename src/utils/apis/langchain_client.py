@@ -3,6 +3,7 @@ from langchain_openai import ChatOpenAI
 from src.utils.apis.router import GLOBAL_ROUTER
 import logging
 import asyncio
+import os
 
 async def _call_openai_completion_async(
     model: str,
@@ -27,6 +28,22 @@ async def _call_openai_completion_async(
             base_url = base_url or router_base_url
             api_key = api_key or router_api_key
             model = actual_model
+
+        # Check for random seed in kwargs or environment
+        if 'seed' not in kwargs:
+            env_seed = os.getenv('random_seed')
+            if env_seed is not None:
+                try:
+                    kwargs['seed'] = int(env_seed)
+                    if verbose:
+                        print(f"Using random seed from environment: {env_seed}")
+                    if logger is not None:
+                        logger.info(f"Using random seed from environment: {env_seed}")
+                except ValueError:
+                    if verbose:
+                        print(f"Invalid random seed in environment: {env_seed}")
+                    if logger is not None:
+                        logger.warning(f"Invalid random seed in environment: {env_seed}")
 
         if verbose:
             print("Calling API Kwargs")
@@ -102,6 +119,22 @@ def _call_openai_completion(
             base_url = base_url or router_base_url
             api_key = api_key or router_api_key
             model = actual_model
+
+        # Check for random seed in kwargs or environment
+        if 'seed' not in kwargs:
+            env_seed = os.getenv('random_seed')
+            if env_seed is not None:
+                try:
+                    kwargs['seed'] = int(env_seed)
+                    if verbose:
+                        print(f"Using random seed from environment: {env_seed}")
+                    if logger is not None:
+                        logger.info(f"Using random seed from environment: {env_seed}")
+                except ValueError:
+                    if verbose:
+                        print(f"Invalid random seed in environment: {env_seed}")
+                    if logger is not None:
+                        logger.warning(f"Invalid random seed in environment: {env_seed}")
 
         if verbose:
             print("Calling API Kwargs")
