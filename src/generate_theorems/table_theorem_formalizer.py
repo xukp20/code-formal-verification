@@ -223,9 +223,10 @@ Hints:
 Return both the corrected code and parsed fields.
 Make sure you have "### Output\n```json" in your response."""
 
-    def __init__(self, model: str = "qwen-max", max_retries: int = 3):
+    def __init__(self, model: str = "qwen-max", max_retries: int = 3, max_global_attempts: int = 1):
         self.model = model
         self.max_retries = max_retries
+        self.max_global_attempts = max_global_attempts
 
     @staticmethod
     def _format_dependencies(service: Service, table: Table, api: APIFunction, project: ProjectStructure) -> str:
@@ -276,7 +277,7 @@ Make sure you have "### Output\n```json" in your response."""
                 return warning_text
         return None
 
-    async def formalize_theorem(self,
+    async def formalize_theorem_once(self,
                               project: ProjectStructure,
                               service: Service,
                               table: Table,
@@ -414,6 +415,28 @@ Make sure you have "### Output\n```json" in your response so that I can find the
         
         if logger:
             logger.error(f"Failed to formalize theorem after {self.max_retries} attempts")
+        return False
+
+    async def formalize_theorem(self,
+                                project: ProjectStructure,
+                                service: Service,
+                                table: Table,
+                                property: TableProperty,
+                                property_id: int,
+                                theorem: TableTheorem,
+                                theorem_id: int,
+                                logger: Optional[Logger] = None) -> bool:
+        """Formalize a single table theorem"""
+        for i in range(self.max_global_attempts):
+            success = await self.formalize_theorem_once(project, service, table, property, property_id, theorem, theorem_id, logger)
+            if success:
+                return True
+            else:
+                if logger:
+                    logger.warning(f"Failed to formalize theorem {theorem_id} for table {table.name} at global attempt {i+1}")
+
+        if logger:
+            logger.error(f"[FAILED] Failed to formalize theorem {theorem_id} for table {table.name} after {self.max_global_attempts} attempts")
         return False
 
     async def _formalize_parallel(self,
