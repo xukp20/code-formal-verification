@@ -60,9 +60,9 @@ max_examples=3
 
 max_workers=16
 
-random_seed=4321
+# random_seed=4321
 # random_seed=42
-# random_seed=1234
+random_seed=1234
 
 if [ -n "$2" ]; then
     random_seed=$2
