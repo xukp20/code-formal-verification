@@ -72,6 +72,8 @@ def analyze_theorems(project_file: Path) -> TheoremStats:
                     stats.total_api_theorems += 1
                     if theorem.theorem.theorem_proved:
                         stats.proved_api_theorems += 1
+                else:
+                    print(f"No theorem for {api.name}: {theorem.description}")
                 
                 # Negative theorems
                 if theorem.theorem_negative:

@@ -43,10 +43,12 @@ Specific Requirements:
 4. Please don't focus on the response of the API, only on the effect on the table, describing the status of the input table, and the relationship between the input params and the table (exists or not), then describe the status of the table after the API is applied
 5. You maybe get a group properties based on the group of APIs, like some of them will increase the record count by 1, some of them will decrease the record count by 1, some of them will preserve the record count, which will give you three properties
 6. You may consider the different behaviors of the APIs given the different input related to the table status, like the record is in the table or not, which will give you more properties
+    - If you need to consider the different behaviors of APIs, you must be specific about the input conditions (like the name is valid), or directly describe the return type of the API to show the different behaviors (like the API returns "success" or "failure")
+    - If the table change depends on the API's different behaviors, you must be give enough conditions to determine which behavior is applied. You cannot just explain "The API is called" without any information to determine which behavior is applied in this case.
 
 Example property:
 "If the current table has no duplicate records in field X, then after applying any of these APIs, the table will still have no duplicate records in field X"
-"After calling the delete API of the account, the table will not have any record with that account id"
+"After calling the delete API of the account successfully, the table will not have any record with that account id"
 
 Return your analysis in two parts:
 ### Analysis

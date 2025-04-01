@@ -139,6 +139,7 @@ Step-by-step reasoning of your formalization process, following the structure be
 1. What are the conditions?
     - What are the restrictions on the input parameters?
     - What are the restrictions on the dependent APIs given the input params? Like the response of the dependent APIs given the current input params
+    - What are the restrictions on the current API itself? Like if the description says the API returns "success" or "failure"
     - What are the restrictions on the table states? Like the existence or non-existence of specific records in the table given the input params
     - How are these restrictions related together?
 2. What are the inputs?
@@ -147,6 +148,7 @@ Step-by-step reasoning of your formalization process, following the structure be
     - Since we want to examine the table state changes using this theorem, you need to pay much attention to the returned table.
         - This should be considered by comparing it to the old table state, to find any record updated, added or deleted, or table not changed
     - Determine if we need to consider the output type of the API function.
+        - Most time not!
         - As the table change is what we care about, the output type of the API function is mostly ignored and needs not to be check.
         - But there maybe some cases that the output type is necessary to be checked, so decide it based on the theorem description
 
