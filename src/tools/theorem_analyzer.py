@@ -103,6 +103,8 @@ def analyze_theorems(project_file: Path) -> TheoremStats:
                         stats.total_table_theorems += 1
                         if theorem.theorem.theorem_proved:
                             stats.proved_table_theorems += 1
+                    else:
+                        print(f"No table theorem for {table.name}: {prop.description}")
                     
                     # Negative theorems
                     if theorem.theorem_negative:

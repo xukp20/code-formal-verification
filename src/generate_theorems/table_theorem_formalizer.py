@@ -142,17 +142,25 @@ Step-by-step reasoning of your formalization process, following the structure be
     - What are the restrictions on the current API itself? Like if the description says the API returns "success" or "failure"
     - What are the restrictions on the table states? Like the existence or non-existence of specific records in the table given the input params
     - How are these restrictions related together?
+
+    **Important examples**:
+    1. If the requirement contains: "if the user and password is valid", even you should check if that is checked by any dependent APIs, if so just use the response of the dependent APIs as the premise of the theorem. If not, try use existing helper functions or create a new one to check it.
+    2. If the requirement contains: "if the login is successful", and the login is a dependent API, you should check if the login is successful by calling the login API.
+    3. If the requirement contains: "if A succeeds", and A is the current API, you should directly use the return type of A as the premise of the theorem, instead of breaking it down into lower level hypotheses.
+    4. If there is no mention of the success or failure of the current API, then it means the property holds for all cases, so you should not assume the success or failure of the current API. Same for the dependent APIs. Like if saying "If the old table has no dup records, then after A, the new table will also have no dup records", you should not assume the success or failure of A, because not matter A succeeds or fails, the property should hold.
+
 2. What are the inputs?
     - Do we need anymore inputs except the input parameters we have already included?
 3. What is the output?
     - Since we want to examine the table state changes using this theorem, you need to pay much attention to the returned table.
         - This should be considered by comparing it to the old table state, to find any record updated, added or deleted, or table not changed
     - Determine if we need to consider the output type of the API function.
-        - Most time not!
+        - **Most time not!**
         - As the table change is what we care about, the output type of the API function is mostly ignored and needs not to be check.
         - But there maybe some cases that the output type is necessary to be checked, so decide it based on the theorem description
 
 #### Conditions and hypotheses
+**First relook at the important examples above**
 - Using the conditions we have analyzed, determine one by one how they can be written as hypotheses in Lean:
 1. First, determine if the condition is complicated and needs to use a helper function to represent it
 2. If so, look for any existing helper functions that can do the job in the implementation of the API function. If you can't find any, create a new one.
