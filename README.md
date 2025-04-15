@@ -1,4 +1,5 @@
 # Towards Automated Formal Verification of Backend Systems with LLMs
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
 ## Overview
 
@@ -13,6 +14,11 @@ Here is overview of the pipeline:
 ## Usage
 
 ### Environment Setup
+
+In your environment:
+```bash
+pip install -r requirements.txt
+```
 
 ### Inputs
 

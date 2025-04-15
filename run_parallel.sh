@@ -50,7 +50,7 @@ output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
 
 # NOTE: log level, default to INFO, can be changed to be DEBUG if more details are needed
-# log_level="INFO"
+log_level="INFO"
 # log_level="DEBUG"
 
 # NOTE: choose the stage to run, one of the following:
