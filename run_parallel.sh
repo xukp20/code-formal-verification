@@ -85,7 +85,7 @@ fi
 
 
 # NOTE: Optional, continue from the last state
-continue=true
+# continue=true
 
 # NOTE: Optional, can manually set the start and end state
 # Look at the pipeline files in src/pipelines to see the available states (as enums)

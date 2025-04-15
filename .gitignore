@@ -179,3 +179,5 @@ source_code/
 
 run_all_bug*
 run_parallel_bug*
+
+!src/utils/apis/example_config.json

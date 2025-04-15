@@ -1,0 +1,28 @@
+{
+    "backends": {
+        "backend1": {
+            "base_url": "base_url_1",
+            "api_key": "api_key_1",
+            "models": {
+                "model1": "model1",
+                "deepseek-r1": "deepseek-r1"
+            }
+        },
+        "aliyun": {
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "api_key": "aliyun_api_key",
+            "models": {
+                "deepseek-v3": "deepseek-v3",
+                "qwen-max-latest": "qwen-max-latest",
+                "qwq-plus": "qwq-plus-2025-03-05"
+            }
+        }
+    },
+    "models": {
+        "model1": ["backend1"],
+        "deepseek-r1": ["backend1"],
+        "deepseek-v3": ["aliyun"],
+        "qwen-max-latest": ["aliyun"],
+        "qwq-plus": ["aliyun"]
+    }
+}

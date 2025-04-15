@@ -1,28 +1,44 @@
-# code-formal-verification
+# Towards Automated Formal Verification of Backend Systems with LLMs
+
+## Overview
+
+![Overview](./pics/concept.png)
+
+This repo contains the code for the paper "Towards Automated Formal Verification of Backend Systems with LLMs".
+
+Here is overview of the pipeline:
+
+![Pipeline](./pics/pipeline.png)
 
 ## Usage
 
-### Project Source Code
+### Environment Setup
 
-Put project source code in `source_code` folder, the name of the top level dir will be the project name, make sure it aligns with
+### Inputs
+
+The input to the pipeline is the source code of the project and the API doc of the project. All the example projects can be downloaded from [here](https://drive.google.com/drive/folders/1GbXVuocv93dEwSqOQiuqrofVRZoXKc2E?usp=sharing), in the `source_code.zip` file.
+
+Unzip and put the project source code in `source_code` folder (there should not be a nested `source_code` dir inside), the name of the top level dir will be the project name, make sure the name aligns with its subdirs:
 - the code subdir (xxxCode)
 - the doc dir (same as the project name)
+
 Also an API doc file for the project is required, under the project dir
 - `doc.md`
 
-Content is like
-```md
-## UserAuthService
-
-### UserLogin
-接受一个用户的手机号码，一个密码。当对应手机号的用户在数据库中不存在或者用户名和密码不匹配时，返回失败，提示用户名或者密码错误；如果用户名存在但有多个记录说明数据库完整性有误，返回错误，提示数据库错误；如果用户名和密码有唯一匹配的记录，则返回登录成功
-
-### UserRegister
-接受一个用户的手机号码和一个密码。如果手机号已经存在，则返回失败，提示用户名已存在；如果不存在，则在数据库中写入对应的记录，返回注册成功
+For example, if there is a `A` project in the `source_code` folder, its structure should be like
+```
+source_code
+├── A
+│   ├── ACode
+│   ├── A
+│   └── doc.md
 ```
 
+The `ACode` codebase together with the table descriptions in yaml format inside the `A` dir will be used in the `formalization` pipeline to create the Lean project, and the `doc.md` will be used in the `theorem generation` pipeline, to generate the theorems for the APIs.
+
+
 ### LLM API Config
-Put config.json in the `src/utils/apis` folder, the content is like
+Put `config.json` in the `src/utils/apis` folder, the content is like
 ```json
 {
     "backends": {
@@ -46,68 +62,113 @@ Put config.json in the `src/utils/apis` folder, the content is like
 }
 ```
 
-With configs for the base_urls and model names and their corresponding backends that will be used in the pipeline.
+- The `backends` section is for the backend LLM providers, each with the base_url, api_key, and a mapping from the general model name in the `models` section to the specific model name that is used in the API call to the provider.
+- The `models` section is for the general model names which is passed to the pipeline as parameters. The list of each model is for the activated backends.
+
+An example config file can be found: `src/utils/apis/example_config.json`.
 
 Call the model with the name in the `models` section.
 
 ### Lean Support
-Make sure you have `lake` installed, and can use `lake build` to build the project.
 
-### Check Proxy
+Make sure you have `lake` installed, and can use `lake build` to build the Lean project.
+See the [Lean](https://lean-lang.org/lean4/doc/quickstart.html) documentation for more details.
+
+### Optional: Check Proxy
 Look at `run.sh` for the proxy settings.
 If you don't need to use proxy, just comment out the settings.
 
 ### Run the pipeline
-For now two tasks are supported:
+Three stages are defined in the pipeline:
 - formalization
 - theorem generation
+- proof search
 
-See `run.sh` for the usage.
+The stage to run is inside the `run_parallel.sh` script.
+The project name is set inside the script or passed as a parameter, for example:
+```bash
+run_parallel.sh UserAuthentication
+```
+
+See `run_parallel.sh` for the usage of commonly used parameters.
 
 Default to:
 - model: qwen-max-latest
-- project: UserAuthenticationProject11
-- task: theorem generation
+- prover-model: deepseek-r1
+- project: UserAuthentication
+- task: formalization
 
-Detailed parameters can be found in the source code.
+Detailed parameters can be found in the source code of each pipeline inside the `src/pipelines` folder.
 
-You need to run formalization first, then theorem generation.
+You need to run formalization first, then theorem generation, and finally proof search to finish the pipeline.
 
 ## Code Structure
 
-### src/pipeline
+The `src/` dir contains the source code for the pipeline, in this structure:
+```
+src/
+├── pipelines/
+├── types/
+├── formalize/
+├── generate_theorems/
+├── prove/
+├── utils/
+└── tools/
+```
 
-#### Formalization Pipeline
-There is `api` and `table` subdirs in the `pipeline` dir, for the first task
+### Pipelines
 
-First, in `table`, we have `analyzer.py` to analyze the dependencies between the tables, and `formalizer.py` to formalize the tables.
+The `pipelines/` dir contains the source code for the pipeline:
+- `base.py`: the base class for the pipeline
+- `formalize_pipeline.py`: the pipeline for the formalization stage
+- `generate_theorems_pipeline.py`: the pipeline for the theorem generation stage
+- `prove_pipeline.py`: the pipeline for the proof search stage
+  
+### Types
 
-Then, in `api`, we have `table_analyzer.py` to analyze the dependencies between the APIs and the tables, and `api_analyzer.py` to analyze the dependencies between the APIs. Then the `formalizer.py` to formalize the APIs.
+The `types/` dir contains the source code for the classes used in the pipeline:
+- `project.py`: the class for the project, which is parsed from the source code, and records all the information of the input project and the generated Lean project, including the code, natural language descriptions, and theorems. The Lean project will be synthesized from the project instance.
+- `lean_file.py`: the class for the Lean file, which is the basic unit in the Lean project. These structured can be converted to the Lean file content and write the corresponding file to the Lean project. The path to the file is also recorded in the instance. There are three types of Lean files:
+  - `LeanStructureFile`: the class for the Lean structure definition file
+  - `LeanFunctionFile`: the class for the Lean function implementation file
+  - `LeanTheoremFile`: the class for the Lean theorem file
+- `lean_manager.py`: A wrapper for the `lake` and `lean` commands, to init, modify, build the Lean project and process any errors to get structured feedback.
+- `lean_structure.py`: A static class for the structure of the Lean project, including the path to the file and the import path. This class is used to set the path to each kind of file in the Lean project, so that determine the structure of the Lean project.
 
-All the logic are in the `formalization_pipeline.py` file.
+### Formalize
 
-#### Theorem Generation Pipeline
+The `formalize/` dir contains the source code for the formalization stage:
+- `init_project.py`: the function to init the Lean project from the source code and the doc.
+- `table_dependency_analyzer.py`, `api_table_dependency_analyzer.py` and `api_dependency_analyzer.py`: the classes to analyze the dependency of the tables, APIs and the APIs on the tables.
+- `table_formalizer.py`: the class to formalize the tables.
+- `api_formalizer.py`: the class to formalize the APIs.
 
-For the second task, in `theorem`, we still have `api` and `table`, called in this order:
-- `api/generator.py` to generate the requirements for each of the APIs
-- `table/analyzer.py` to analyze the properties of the tables
-- `api/formalizer.py` to formalize the theorems for the APIs
-- `table/formalizer.py` to formalize the theorems for the tables
+### Generate Theorems
 
-All the logic are in the `theorem_generation_pipeline.py` file.
+The `generate_theorems/` dir contains the source code for the theorem generation stage:
+- `api_requirement_generator.py`: the class to generate the requirements for the APIs. Including the API doc splitter and the requirement generator.
+- `api_theorem_formalizer.py`: the class to formalize the theorems for the APIs.
+- `table_property_analyzer.py`: the class to analyze the properties of the tables.
+- `table_theorem_formalizer.py`: the class to formalize the theorems for the tables.
 
-### src/utils
+### Prove
 
-#### lean
+The `prove/` dir contains the source code for the proof search stage:
+- `api_theorem_prover_v2.py`: the class to prove the theorems for the APIs.
+- `table_theorem_prover_v2.py`: the class to prove the theorems for the tables.
+- `api_negative_theorem_generator.py`: the class to generate the negative theorems for the APIs.
+- `table_negative_theorem_generator.py`: the class to generate the negative theorems for the tables.
 
-legacy
+The positive and negative theorems are both proved using the same prover. The provers without "v2" are the legacy version that uses conversation style to refine the proof, which may result in too long context for the reasoning model.
 
-#### apis
+### Utils
 
-For the routing and handling of the LLM API calls.
+The `utils/` dir contains:
+- `apis/`: Support for LLM APIs, needs a `config.json` file to specify the LLM API providers and models.
+- `lean/`: A parser tool for the output of `lake build`.
 
-#### parse_project
+### Tools
 
-The base class to parse the input project, with the doc and scala code. 
-
-Project level lean support are implemented inside the `ProjectStructure` and its subclasses, so that it is always consistent with a real lean project (default to `lean_project/project_name`).
+The `tools/` dir contains extra tools for data processing or statistics.
+- `generate_api_doc.py`: We can generate a fake API doc from the codebase if no predefined API doc is available. *But since the doc is created by reading the code, we cannot find bugs that the code misaligns with the doc in this way.* You can use this way to create a human-readable doc for the codebase and use the pipeline to guarantee the equivalence of the code and the doc.
+- `theorem_analyzer.py`: A tool to analyze the theorems and the proof results given a json file which is the project structure dumped from the pipeline. You can refer to `analyze.sh` in the root dir for the usage.
