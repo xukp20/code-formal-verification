@@ -1,20 +1,22 @@
 set -e
 set -x
 
-# Set proxy
+# Set proxy if needed
 export http_proxy="http://127.0.0.1:7890"
 export https_proxy="http://127.0.0.1:7890"
 
 # Set PYTHONPATH to include the src directory
 export PYTHONPATH=$(pwd)
 
-# pre download packages
-export PACKAGE_PATH=".cache/packages"
+# pre download packages if you need to include mathlib as the dependecies
+# export PACKAGE_PATH=".cache/packages"
 
 # create outputs and lean_project if not exists
 mkdir -p outputs
 mkdir -p lean_project
 
+
+# NOTE: choose the model for the formalization or analysis tasks
 model="qwen-max-latest"
 # model="deepseek-v3"
 # model="o1-mini"
@@ -24,58 +26,78 @@ model="qwen-max-latest"
 # model="qwq-32b"
 # model="doubao-pro"
 
+# NOTE: choose the model for the proof task
 prover_model="deepseek-r1"
 # prover_model="doubao-pro"
 
-
+# NOTE: whether to add mathlib as the dependecies
+# default to false
 add_mathlib=false
 
-
+# NOTE: choose the project to run
 project_name="UserAuthentication"
-# project_name="UserAuthenticationV1"
-# project_name="UserAuthenticationV2"
 
+# Or provide the project name as the first argument
 # if has $1, load project_name from $1
 if [ -n "$1" ]; then
     project_name=$1
 fi
 
-# project_name="BankAccount"
-
+# Default directories, can be changed by the following variables
 project_base_path="source_code"
 lean_base_path="lean_project"
 output_base_path="outputs"
 doc_path=$project_base_path/$project_name/"doc.md"
 
-log_level="INFO"
+# NOTE: log level, default to INFO, can be changed to be DEBUG if more details are needed
+# log_level="INFO"
 # log_level="DEBUG"
 
-# task="formalize"
-task="theorem_generate"
+# NOTE: choose the stage to run, one of the following:
+# This version of pipeline must follow the order: formalize -> theorem_generate -> prove
+# Or you can change modify the pipeline_state.json file to skip some of the tasks.
+task="formalize"
+# task="theorem_generate"
 # task="prove"
 
+# NOTE: max number of retries for compiler retry, default to 8
+# This is used for all tasks related to the Lean compiler
 max_theorem_retries=8
+
+# NOTE: max number of global attempts for the proof task, default to 5
 max_global_attempts=5
+
+# NOTE: max number of examples for the proof task, default to 3
 max_examples=3
 
+# NOTE: max number of workers to call LLMS in parallel, default to 16
 max_workers=16
 
+# NOTE: random seed, default to 4321
 random_seed=4321
 # random_seed=42
 # random_seed=1234
 
-
+# Or provide the random seed as the second argument
 if [ -n "$2" ]; then
     random_seed=$2
 fi
 
+
+# NOTE: Optional, continue from the last state
 continue=true
 
+# NOTE: Optional, can manually set the start and end state
+# Look at the pipeline files in src/pipelines to see the available states (as enums)
 # start_state="TABLE_FORMALIZATION"
 # start_state="API_TABLE_DEPENDENCY"
 # start_state="API_FORMALIZATION"
 
-start_state="API_THEOREMS"
+# start_state="API_THEOREMS"
+# start_state="TABLE_PROPERTIES"
+# start_state="TABLE_THEOREMS"
+
+# start_state="TABLE_THEOREMS"
 
 # end_state="TABLE_DEPENDENCY"
 # end_state="TABLE_FORMALIZATION"
@@ -83,9 +105,13 @@ start_state="API_THEOREMS"
 # end_state="API_FORMALIZATION"
 
 # end_state="API_REQUIREMENTS"
-end_state="API_THEOREMS"
+# end_state="API_THEOREMS"
+# end_state="TABLE_PROPERTIES"
+
+# end_state="API_THEOREMS"
 
 
+# Run command for the three stages
 if [ "$task" == "formalize" ]; then
     command="python src/pipelines/formalize_pipeline.py \
 --project-name $project_name \

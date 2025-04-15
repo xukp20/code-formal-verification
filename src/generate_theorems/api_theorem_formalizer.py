@@ -153,9 +153,14 @@ Step-by-step reasoning of your formalization process, following the structure be
     - But remember to go through the chosen helper function to make sure it is correct and do what you want
     - If so, never create a new helper function that applys an exactly same logic as the existing helper functions, which may cause difficulty for the prover
 3. If the condition is simple, you can write it directly as a hypothesis
-4. Write this single part of the condition as a hypothesis in Lean
+4. If the condition is related to some dependent APIs, you may need to use the return values of the dependent APIs as the premise of the theorem    
+    - **Important**: Also, the `name` of the dependent APIs must be accurate, so look for minor differences between the names of the dependent APIs in the implementation and the requirement first.
+        - For example, if the requirement calls a `checkValid` API, but the implementation calls a `checkUserValid` API, you should point out this mismatch here.
+    - If no misalignment of the dependent APIs is found, you can use the return values of the dependent APIs as the premise of the theorem
+5. Write this single part of the condition as a hypothesis in Lean
     - If you find the implementation of the API file missing some essential parts that you need to formalize the condition, you should consider it as a potential bug, which will be presented in the ### Warning section later. But you should still try your best to formalize the theorem based on the information you have.
         - For example, if the implementation of the API file has no API call to a `checkValid` API, but the requirement describes that the input params should be checked by the `checkValid` API, you should point it out here, but try to find the closest way to formalize the condition.
+        
 5. Repeat the above steps until all the conditions are written as hypotheses
 
 #### Conclusion
@@ -172,7 +177,7 @@ Step-by-step reasoning of your formalization process, following the structure be
 
 #### Summary 
 In this part, you should go through the analysis above to:
-- Repeat the original requirement as comment here, so that you will make sure the requirement is not changed
+- Repeat **the original requirement as comment here**, so that you will make sure the requirement is not changed, and if any misalignment is found, consider it as a potential bug
 - Construct the final theorem statement, the proof should be `sorry`
 - Collect all the potential warnings here
     - Missing return types in API functions, which may lead to theorem statement not equal to the requirement
@@ -188,12 +193,10 @@ After these steps, you should have a complete theorem statement. Now put it in t
 ```
 
 ### Warning 
-(Optional)
 If you notice any potential formalization issues that prevent you from writing a theorem statement, describe them here, with a title of "### Warning". For example:
 - Missing return types in API functions, which may lead to theorem statement not equal to the requirement
 - Missing dependent APIs in the implementation of the API function, which may lead to theorem statement not equal to the requirement
-- Different API calls in the implementation and the requirement, which may lead to theorem statement not equal to the requirement
-If you notice some issues but that doesn't lead to compilation errors, you should not include this section and try to do the formalization with the given formalization.
+- Different API calls in the implementation and the requirement, which may lead to theorem statement not equal to the requirement, like minor differences between `checkValid` and `checkUserValid`
 Don't include this section in the output json.
 - If there is no warning, put a single word "None" for this part, without any other words
 
@@ -202,7 +205,7 @@ Don't include this section in the output json.
 {{
   "imports": "string of import statements and open commands",
   "helper_functions": "string of helper function definitions or type definitions",
-  "comment": "/- string of original requirement as comment, must not be modified, write as a Lean comment -/",
+  "comment": "/- string of **original requirement** as comment, **must not be modified**, write as a Lean comment -/",
   "theorem_unproved": "string of theorem statement with sorry"
 }}
 ```

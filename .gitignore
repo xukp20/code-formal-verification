@@ -176,3 +176,6 @@ source_code/
 **/*data/
 **/*lean_project/
 .cache/
+
+run_all_bug*
+run_parallel_bug*

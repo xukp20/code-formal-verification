@@ -8,7 +8,7 @@ Put project source code in `source_code` folder, the name of the top level dir w
 - the code subdir (xxxCode)
 - the doc dir (same as the project name)
 Also an API doc file for the project is required, under the project dir
-- doc.md
+- `doc.md`
 
 Content is like
 ```md
