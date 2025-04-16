@@ -22,7 +22,7 @@ pip install -r requirements.txt
 
 ### Inputs
 
-The input to the pipeline is the source code of the project and the API doc of the project. All the example projects can be downloaded from [here](https://drive.google.com/drive/folders/1GbXVuocv93dEwSqOQiuqrofVRZoXKc2E?usp=sharing), in the `source_code.zip` file.
+The input to the pipeline is the source code of the project and the API doc of the project. All the example projects can be downloaded from [here](https://anonymous.4open.science/r/code-formal-verification-data-3837/), in the `source_code.zip` file.
 
 Unzip and put the project source code in `source_code` folder (there should not be a nested `source_code` dir inside), the name of the top level dir will be the project name, make sure the name aligns with its subdirs:
 - the code subdir (xxxCode)
