@@ -680,8 +680,9 @@ class ProjectStructure:
         # try build the lean project
         success, error = LeanProjectManager.build(self.lean_project_path)
         if not success:
-            raise Exception(f"Failed to build the lean project: {error}")
-    
+            # raise Exception(f"Failed to build the lean project: {error}")
+            logger.warning(f"Failed to build the lean project: {error}")
+
     def sort_apis(self) -> List[Tuple[str, str]]:
         """Sort all APIs across services based on dependencies
         

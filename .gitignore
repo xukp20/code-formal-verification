@@ -176,8 +176,12 @@ source_code/
 **/*data/
 **/*lean_project/
 .cache/
+theorem_stats/
+visualization_output/
 
 run_all_bug*
 run_parallel_bug*
 
 !src/utils/apis/example_config.json
+
+CLAUDE.md

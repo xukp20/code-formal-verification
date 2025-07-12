@@ -2,6 +2,9 @@
 # This script is used to compute the theorem statistics for the projects
 # Tool named `theorem_analyzer` in src/tools can take in any json file created from a project structure (see `src/types/project`)
 
+# Add the path to the src directory to the PYTHONPATH
+export PYTHONPATH=$(pwd)
+
 # Base directory containing the seed directories
 # BASE_DIR="outputs/all/prove/api_theorems"
 BASE_DIR="outputs/all/prove/table_theorems"

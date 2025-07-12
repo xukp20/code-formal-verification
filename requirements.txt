@@ -1,3 +1,5 @@
 # Core dependencies
 langchain-openai  # For OpenAI API integration
 asyncio          # For async operations
+matplotlib       # For data visualization
+numpy           # For numerical operations
