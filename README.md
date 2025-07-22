@@ -1,5 +1,5 @@
 # Towards Automated Formal Verification of Backend Systems with LLMs
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![arXiv](https://img.shields.io/badge/arXiv-2506.10998-b31b1b.svg)](https://arxiv.org/abs/2506.10998) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
 ## Overview
 
@@ -194,3 +194,13 @@ The `tools/` dir contains extra tools for data processing or statistics.
 - `generate_api_doc.py`: We can generate a fake API doc from the codebase if no predefined API doc is available. *But since the doc is created by reading the code, we cannot find bugs that the code misaligns with the doc in this way.* You can use this way to create a human-readable doc for the codebase and use the pipeline to guarantee the equivalence of the code and the doc.
 - `theorem_analyzer.py`: A tool to analyze the theorems and the proof results given a json file which is the project structure dumped from the pipeline. You can refer to `analyze.sh` in the root dir for the usage.
 - `visualization.py`: A tool to visualize the theorem proving results.
+
+## Citation
+```text
+@article{xu2025towards,
+  title={Towards Automated Formal Verification of Backend Systems with LLMs},
+  author={Xu, Kangping and Luo, Yifan and Yuan, Yang and Yao, Andrew Chi-Chih},
+  journal={arXiv preprint arXiv:2506.10998},
+  year={2025}
+}
+```
